@@ -8,6 +8,7 @@ import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from "@/co
 import { ShieldCheck, Menu, LayoutDashboard } from "lucide-react"
 import { useState, useEffect } from "react"
 import { motion } from "framer-motion"
+import NotificationBell from "../NotificationBell"
 
 export default function HeaderClient({ user }) {
     const pathname = usePathname()
@@ -22,15 +23,12 @@ export default function HeaderClient({ user }) {
 
     const isActive = (path) => pathname === path
 
-    // CONDITIONAL NAVIGATION LINKS
     const navItems = isAdmin 
         ? [
-            // If Admin: Only Home + Console
             { name: "Home", href: "/" },
             { name: "Admin Console", href: "/admin" },
           ]
         : [
-            // If User/Guest: Standard Links
             { name: "Home", href: "/" },
             { name: "Report Issue", href: "/report-issue" },
             { name: "Live Status", href: "/status" },
@@ -96,7 +94,6 @@ export default function HeaderClient({ user }) {
                 {/* Right Side Actions */}
                 <div className="flex items-center gap-4">
                     
-                    {/* Admin Badge */}
                     {isAdmin && (
                         <div className="hidden lg:flex items-center px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-bold uppercase tracking-wider">
                             Official Account
@@ -106,6 +103,9 @@ export default function HeaderClient({ user }) {
                     <div className="h-6 w-px bg-white/10 hidden sm:block"></div>
 
                     <SignedIn>
+                        {/* 🔔 Notification Bell Added Here */}
+                        {user && <NotificationBell userId={user.id} />}
+                        
                         <UserButton 
                             afterSignOutUrl="/"
                             appearance={{ elements: { avatarBox: "h-9 w-9 ring-2 ring-white/10" }}}
