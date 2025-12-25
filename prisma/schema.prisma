@@ -1,0 +1,297 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// --- ENUMS ---
+
+enum Role {
+  USER
+  ADMIN       // Department Official (e.g., Water Dept Head)
+  SUPER_ADMIN // You and your team
+}
+
+enum ReportStatus {
+  PENDING
+  IN_PROGRESS
+  RESOLVED
+  REJECTED    // For fake/invalid reports
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum NotificationType {
+  EMAIL
+  SMS
+  IN_APP
+}
+
+// --- MODELS ---
+
+model User {
+  id           String   @id @default(cuid())
+  clerkId      String   @unique // We link Clerk ID here
+  email        String   @unique
+  role         Role     @default(USER)
+  
+  // Basic Profile (Encrypted logic to be handled in API)
+  firstName    String?
+  lastName     String?
+  phone        String?
+  
+  // For "Fake Report" Tracking
+  // If a user submits fake reports, Admin increases this. 
+  // If strikeCount >= 3, they get banned.
+  strikeCount  Int      @default(0)
+  isBanned     Boolean  @default(false)
+  
+  // Reputation System
+  reputationPoints  Int      @default(0)
+  verifiedReports   Int      @default(0)
+  trustScore        Float    @default(0.0)
+  
+  // Notification Preferences
+  emailNotifications Boolean @default(true)
+  smsNotifications   Boolean @default(false)
+  
+  // Relations
+  reports      Report[]
+  adminProfile AdminProfile? // Only exists if role is ADMIN
+  comments     Comment[]
+  verifications Verification[]
+  notifications Notification[]
+  
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+// AdminProfile: Links a User to a specific Department in a specific City
+model AdminProfile {
+  id             String       @id @default(cuid())
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId         String       @unique
+  
+  department     Department   @relation(fields: [departmentId], references: [id])
+  departmentId   String
+  
+  // New Real-World Fields
+  designation    String?      // e.g. "Zonal Officer", "Junior Engineer"
+  employeeId     String?      // e.g. "GOV-MH-8821"
+  phone          String?      // Official Contact
+  
+  isVerified     Boolean      @default(false) 
+}
+
+// --- LOCATION & HIERARCHY ---
+// Structure: State -> City/Corp -> Area/Zone -> Department
+
+model State {
+  id     String @id @default(cuid())
+  name   String @unique // e.g., "Maharashtra"
+  cities City[]
+}
+
+model City {
+  id          String       @id @default(cuid())
+  name        String       // e.g., "Pandharpur Municipal Corporation"
+  state       State        @relation(fields: [stateId], references: [id])
+  stateId     String
+  
+  areas       Area[]       // e.g., "Station Road", "Temple Area"
+  departments Department[]
+  reports     Report[]
+
+  @@unique([name, stateId]) // Prevent duplicate cities in same state
+}
+
+model Area {
+  id      String   @id @default(cuid())
+  name    String   // e.g., "Ward No. 1", "Isbavi"
+  city    City     @relation(fields: [cityId], references: [id], onDelete: Cascade)
+  cityId  String
+  
+  reports Report[]
+
+  @@unique([name, cityId]) // Prevent duplicate areas in same city
+}
+
+model Department {
+  id        String   @id @default(cuid())
+  name      String   // e.g., "Water Supply", "Sanitation"
+  city      City     @relation(fields: [cityId], references: [id], onDelete: Cascade)
+  cityId    String
+  
+  admins    AdminProfile[]
+  reports   Report[]
+  templates ReportTemplate[]
+
+  @@unique([name, cityId]) // Prevent duplicate depts in same city
+}
+
+// --- THE CORE ISSUE REPORT ---
+
+model Report {
+  id          String   @id @default(cuid())
+  
+  // The Public ID for tracking (e.g., "PN-7782")
+  reportId    String   @unique 
+  
+  // Author is linked for backend tracking, but kept anonymous in UI
+  author      User     @relation(fields: [authorId], references: [id])
+  authorId    String
+
+
+  // Where is the problem?
+  city        City       @relation(fields: [cityId], references: [id])
+  cityId      String
+  
+  // Area is optional (GPS used primarily)
+  area        Area?      @relation(fields: [areaId], references: [id])
+  areaId      String?
+  
+  // Who should fix it?
+  department  Department @relation(fields: [departmentId], references: [id])
+  departmentId String
+
+  // Issue Details
+  title       String
+  description String
+  imageUrl    String?    // URL from storage (e.g., Sanity/AWS) - DEPRECATED: Use ReportImage model
+  status      ReportStatus @default(PENDING)
+  priority    Priority     @default(MEDIUM)
+  
+  // --- UPDATED: Simple String for Category ---
+  category    String?    
+  
+  // Tags (Kept as separate model for now)
+  tags        Tag[]
+  
+  // Real-world Geolocation
+  latitude    Float?     
+  longitude   Float?
+  
+  // Admin Feedback/Action
+  adminNote   String?    // e.g., "Work started, JCB dispatched"
+  estimatedCost Float?   // Estimated cost to resolve
+  actualCost    Float?   // Actual cost incurred
+  
+  // Verification
+  isVerified     Boolean  @default(false)
+  verificationCount Int   @default(0)
+  
+  // Sharing
+  shareToken   String?   @unique // For public sharing
+  isPublic     Boolean   @default(false)
+  
+  // Relations
+  images       ReportImage[]
+  comments     Comment[]
+  updates      ReportUpdate[]
+  verifications Verification[]
+  
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+}
+
+// Multiple Images per Report
+model ReportImage {
+  id        String   @id @default(cuid())
+  report    Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  reportId  String
+  url       String
+  isBefore  Boolean  @default(false) // For before/after photos
+  order     Int      @default(0)     // Display order
+  createdAt DateTime @default(now())
+}
+
+// --- DELETED: model Category {} ---
+
+// Tags for Reports (Kept as requested)
+model Tag {
+  id        String   @id @default(cuid())
+  name      String
+  reports   Report[]
+  createdAt DateTime @default(now())
+  
+  @@unique([name])
+}
+
+// Comments on Reports
+model Comment {
+  id        String   @id @default(cuid())
+  report    Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  reportId  String
+  author    User     @relation(fields: [authorId], references: [id])
+  authorId  String
+  content   String
+  isPublic  Boolean  @default(true)
+  isModerated Boolean @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Status Update History / Timeline
+model ReportUpdate {
+  id        String   @id @default(cuid())
+  report    Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  reportId  String
+  oldStatus ReportStatus?
+  newStatus ReportStatus
+  note      String?
+  updatedBy String?  // Admin ID or system
+  createdAt DateTime @default(now())
+}
+
+// Verification System
+model Verification {
+  id        String   @id @default(cuid())
+  report    Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  reportId  String
+  verifier  User     @relation(fields: [verifierId], references: [id])
+  verifierId String
+  isVerified Boolean @default(true)
+  createdAt DateTime @default(now())
+  
+  @@unique([reportId, verifierId]) // One verification per user per report
+}
+
+// Notifications (PRESERVED)
+model Notification {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  type      NotificationType
+  title     String
+  message   String
+  reportId  String?  // Link to report if applicable
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+// Report Templates
+model ReportTemplate {
+  id          String   @id @default(cuid())
+  name        String
+  
+  // Updated to match removal of Category model
+  category    String? 
+  
+  title       String
+  description String
+  department  Department? @relation(fields: [departmentId], references: [id])
+  departmentId String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
