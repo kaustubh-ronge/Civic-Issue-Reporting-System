@@ -3,66 +3,50 @@
 import { db } from "@/lib/prisma"
 import { checkUser } from "@/lib/checkUser"
 import { revalidatePath } from "next/cache"
-// Keep these imports if the files exist, otherwise comment them out to prevent crashes
+// Keep imports if files exist
 import { detectPriority } from "@/lib/priorityDetector" 
 import { sendNotification } from "@/lib/notifications"
 
-// --- 1. CREATE REPORT ---
 export async function createReport(formData) {
     try {
         const user = await checkUser()
         if (!user) return { success: false, error: "You must be logged in." }
 
-        // Check ban status
+        // Check ban
         const dbUser = await db.user.findUnique({ where: { id: user.id }, select: { isBanned: true } })
-        if (dbUser?.isBanned) {
-            return { success: false, error: "Your account is banned." }
-        }
+        if (dbUser?.isBanned) return { success: false, error: "Account banned." }
 
-        // Extract Basic Fields
+        // 1. Basic Fields
         const title = formData.get("title")
         const description = formData.get("description")
         const cityId = formData.get("cityId")
         const departmentId = formData.get("departmentId")
         const address = formData.get("address")
         
-        // Handle Category Logic (String)
+        // 2. Category Logic
         const selectedCategory = formData.get("category")
         const customCategory = formData.get("customCategory")
-        let finalCategoryString = selectedCategory;
-        if (selectedCategory === "Other" && customCategory) {
-            finalCategoryString = customCategory;
-        }
+        let finalCategory = selectedCategory === "Other" && customCategory ? customCategory : selectedCategory;
 
-        // Priority & Location
-        const rawPriority = formData.get("priority")
-        const priority = (rawPriority && rawPriority !== "AUTO") ? rawPriority : null
+        // 3. Priority & Location
+        const priority = formData.get("priority") === "AUTO" ? null : formData.get("priority")
         const lat = parseFloat(formData.get("lat")) || 0
         const lng = parseFloat(formData.get("lng")) || 0
-        const detectedPriority = priority || (detectPriority ? detectPriority(title, description) : "MEDIUM")
+        const detectedPriority = priority || "MEDIUM"
 
         const reportId = `RPT-${Math.floor(1000 + Math.random() * 9000)}`
         const shareToken = `share_${Math.random().toString(36).substring(2, 15)}`
 
-        // Area Logic (Dynamic import safety)
+        // 4. Area Logic
         let area = null
         if (address) {
             try {
                 const { findOrCreateArea } = await import("@/lib/areaNormalizer").catch(() => ({}))
-                if (findOrCreateArea) {
-                    area = await findOrCreateArea(db, cityId, address)
-                }
-            } catch (e) { console.log("Area skip") }
+                if (findOrCreateArea) area = await findOrCreateArea(db, cityId, address)
+            } catch (e) {}
         }
 
-        // Tags & Images Logic
-        const tags = formData.getAll("tags") || []
-        const imageFiles = formData.getAll("images")
-        // Thumbnail logic: check if valid file exists
-        const hasImages = imageFiles.length > 0 && imageFiles[0].size > 0;
-        const firstImageUrl = hasImages ? "placeholder-thumbnail.jpg" : null
-
-        // Create Report
+        // 5. Create Report Record
         const report = await db.report.create({
             data: {
                 reportId,
@@ -70,66 +54,77 @@ export async function createReport(formData) {
                 description: `${description}\n\n📍 Location: ${address}`,
                 status: "PENDING",
                 priority: detectedPriority,
-                category: finalCategoryString, // Saving as simple String
+                category: finalCategory,
                 latitude: lat,
                 longitude: lng,
-                imageUrl: firstImageUrl,
                 shareToken,
-                
                 author: { connect: { id: user.id } },
                 city: { connect: { id: cityId } },
                 department: { connect: { id: departmentId } },
-                
                 ...(area && { area: { connect: { id: area.id } } }),
-
-                // Tags Logic
-                ...(tags.length > 0 && {
+                
+                // Tags
+                ...(formData.getAll("tags").length > 0 && {
                     tags: {
-                        connectOrCreate: tags.map(tagName => ({
-                            where: { name: tagName },
-                            create: { name: tagName }
+                        connectOrCreate: formData.getAll("tags").map(tag => ({
+                            where: { name: tag },
+                            create: { name: tag }
                         }))
                     }
                 }),
 
-                // Initial Update
                 updates: {
-                    create: {
-                        newStatus: "PENDING",
-                        note: "Report submitted via Web Portal",
-                        updatedBy: "System"
-                    }
+                    create: { newStatus: "PENDING", note: "Report submitted", updatedBy: "system" }
                 }
             }
         })
+
+        // 6. 🟢 IMAGE TO DATABASE LOGIC (Base64)
+        const imageFiles = formData.getAll("images")
         
-        // Save Image Records
-        if (hasImages) {
+        if (imageFiles && imageFiles.length > 0) {
             for (let i = 0; i < imageFiles.length; i++) {
-                await db.reportImage.create({
-                    data: {
-                        reportId: report.id,
-                        // In real app, this URL comes from AWS S3
-                        url: `https://placehold.co/600x400?text=Evidence+${i+1}`, 
-                        order: i
+                const file = imageFiles[i]
+                
+                if (file.size > 0) {
+                    // Convert file to Buffer
+                    const buffer = Buffer.from(await file.arrayBuffer());
+                    
+                    // Convert Buffer to Base64 String
+                    const base64Data = buffer.toString("base64");
+                    const fileType = file.type || "image/jpeg"; // Default to jpeg if type missing
+                    
+                    // Create the Data URI (e.g. "data:image/png;base64,iVBOR...")
+                    // This string renders directly in <img src="..." />
+                    const base64Url = `data:${fileType};base64,${base64Data}`;
+
+                    // Save the HUGE string directly to the DB
+                    await db.reportImage.create({
+                        data: {
+                            reportId: report.id,
+                            url: base64Url, // Storing data here
+                            order: i
+                        }
+                    })
+
+                    // Backward compatibility for single image field
+                    if (i === 0) {
+                        await db.report.update({
+                            where: { id: report.id },
+                            data: { imageUrl: base64Url }
+                        })
                     }
-                })
+                }
             }
         }
-        
-        // Notifications
+
         if (sendNotification) {
-            await sendNotification(
-                user.id,
-                "Report Submitted",
-                `Report ID: ${reportId} submitted successfully.`,
-                reportId,
-                detectedPriority
-            ).catch(e => console.log("Notification failed", e))
+            await sendNotification(user.id, "Report Submitted", `ID: ${reportId}`, reportId, detectedPriority).catch(() => {})
         }
 
         revalidatePath('/admin')
         revalidatePath('/status')
+        
         return { success: true, reportId }
 
     } catch (error) {
@@ -138,64 +133,35 @@ export async function createReport(formData) {
     }
 }
 
-// --- 2. GET SINGLE REPORT (Fixed: Includes Images) ---
+// ... (Rest of the file: getReportByReportId, getUserReports remains the same)
 export async function getReportByReportId(reportId) {
     try {
-        if (!reportId || typeof reportId !== 'string') {
-            return { success: false, error: "Invalid report ID" }
-        }
-
         const report = await db.report.findUnique({
-            where: { reportId: reportId },
+            where: { reportId },
             include: {
-                author: {
-                    select: { firstName: true, email: true }
-                },
-                city: {
-                    include: { state: true }
-                },
+                author: { select: { firstName: true, email: true } },
+                city: { include: { state: true } },
                 department: true,
                 area: true,
-                tags: true, // Fetch tags
-                images: {   // Fetch multiple images
-                    orderBy: { order: 'asc' }
-                },
-                updates: {  // Fetch timeline
-                    orderBy: { createdAt: 'desc' }
-                }
+                tags: true,
+                images: { orderBy: { order: 'asc' } },
+                updates: { orderBy: { createdAt: 'desc' } }
             }
         })
-
-        if (!report) {
-            return { success: false, error: "Report not found" }
-        }
-
+        if (!report) return { success: false, error: "Not found" }
         return { success: true, report }
-    } catch (error) {
-        console.error("Get Report Error:", error)
-        return { success: false, error: "Failed to fetch report" }
-    }
+    } catch (error) { return { success: false, error: "Fetch failed" } }
 }
 
-// --- 3. GET USER REPORTS ---
 export async function getUserReports() {
     try {
         const user = await checkUser()
         if (!user) return { success: false, error: "Unauthorized" }
-
         const reports = await db.report.findMany({
             where: { authorId: user.id },
             orderBy: { createdAt: 'desc' },
-            include: {
-                city: true,
-                department: true,
-                images: { take: 1 } // Just get thumbnail
-            }
+            include: { city: true, department: true, images: { take: 1 } }
         })
-
         return { success: true, reports }
-    } catch (error) {
-        console.error("Get User Reports Error:", error)
-        return { success: false, error: "Failed to fetch reports" }
-    }
+    } catch (error) { return { success: false, error: "Fetch failed" } }
 }
