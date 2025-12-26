@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { MapPin, Clock, Settings, Filter, Search, ChevronRight, Activity, CheckCircle2, AlertCircle, Image as ImageIcon } from "lucide-react"
+import { MapPin, Clock, Settings, Filter, Activity, CheckCircle2, AlertCircle, Image as ImageIcon, ChevronRight, Loader2 } from "lucide-react"
 import { updateReportStatus } from "@/actions/adminDashboardActions"
 import { toast } from "sonner"
 import { formatDistanceToNow } from "date-fns"
@@ -51,32 +51,27 @@ export default function AdminDashboardClient({ user, initialReports = [], adminP
     // Animation Variants
     const container = {
         hidden: { opacity: 0 },
-        show: {
-            opacity: 1,
-            transition: { staggerChildren: 0.1 }
-        }
+        show: { opacity: 1, transition: { staggerChildren: 0.1 } }
     }
-
     const item = {
         hidden: { opacity: 0, y: 20 },
         show: { opacity: 1, y: 0 }
     }
 
     return (
-        <div className="space-y-10 pb-20">
+        <div className="space-y-8 pb-20">
             
             {/* --- DASHBOARD HEADER --- */}
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
                 <div className="space-y-2">
                     <motion.div 
-                        initial={{ opacity: 0, x: -20 }} 
-                        animate={{ opacity: 1, x: 0 }} 
+                        initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} 
                         className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-xs font-medium text-slate-300"
                     >
                         <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-                        Live Dashboard
+                        Live Department Feed
                     </motion.div>
-                    <h1 className="text-4xl font-bold text-white tracking-tight">Overview</h1>
+                    <h1 className="text-3xl md:text-4xl font-bold text-white tracking-tight">Overview</h1>
                     <div className="flex items-center gap-2 text-slate-400 text-sm">
                         <Badge variant="outline" className="text-orange-400 border-orange-400/20 bg-orange-400/10 px-3 py-0.5">
                             {adminProfile?.department?.name}
@@ -105,30 +100,30 @@ export default function AdminDashboardClient({ user, initialReports = [], adminP
             </div>
 
             {/* --- STATS GRID --- */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 <StatCard label="Total Reports" value={total} icon={Activity} color="text-purple-400" bg="bg-purple-500/10" />
                 <StatCard label="Pending" value={pending} icon={AlertCircle} color="text-yellow-400" bg="bg-yellow-500/10" />
                 <StatCard label="In Progress" value={inProgress} icon={Clock} color="text-blue-400" bg="bg-blue-500/10" />
                 <StatCard label="Resolved" value={resolved} icon={CheckCircle2} color="text-green-400" bg="bg-green-500/10" />
             </div>
 
-            {/* --- MAIN CONTENT TABS --- */}
+            {/* --- TABS & LIST --- */}
             <Tabs defaultValue="all" className="space-y-8">
-                <div className="flex items-center justify-between border-b border-white/10 pb-0">
-                    <TabsList className="bg-transparent p-0 gap-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-white/10 gap-4">
+                    <TabsList className="bg-transparent p-0 h-auto gap-4 flex-wrap justify-start">
                         {['all', 'pending', 'in_progress', 'resolved'].map((tab) => (
                             <TabsTrigger 
                                 key={tab} 
                                 value={tab}
-                                className="bg-transparent border-b-2 border-transparent data-[state=active]:border-orange-500 data-[state=active]:text-orange-500 text-slate-400 rounded-none px-2 pb-4 pt-2 transition-all hover:text-white uppercase tracking-wider text-xs font-bold"
+                                className="bg-transparent border-b-2 border-transparent data-[state=active]:border-orange-500 data-[state=active]:text-orange-500 text-slate-400 rounded-none px-2 pb-3 pt-2 transition-all hover:text-white uppercase tracking-wider text-xs font-bold"
                             >
                                 {tab.replace('_', ' ')}
                             </TabsTrigger>
                         ))}
                     </TabsList>
                     
-                    <div className="hidden md:flex items-center gap-2 text-sm text-slate-500 pb-2">
-                        <Filter className="h-4 w-4" /> Filtered by Date
+                    <div className="hidden sm:flex items-center gap-2 text-xs text-slate-500 pb-2">
+                        <Filter className="h-3 w-3" /> Filtered by Latest
                     </div>
                 </div>
 
@@ -188,13 +183,13 @@ export default function AdminDashboardClient({ user, initialReports = [], adminP
                                 value={adminNote} 
                                 onChange={(e) => setAdminNote(e.target.value)} 
                                 placeholder="Describe the action taken..." 
-                                className="bg-slate-950 border-white/10 text-white min-h-[120px] resize-none p-4" 
+                                className="bg-slate-950 border-white/10 text-white min-h-30 resize-none p-4" 
                             />
                         </div>
                     </div>
                     <DialogFooter>
-                        <Button onClick={handleUpdateStatus} disabled={statusLoading} className="w-full bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white h-12 font-bold">
-                            {statusLoading ? "Updating..." : "Save Updates"}
+                        <Button onClick={handleUpdateStatus} disabled={statusLoading} className="w-full bg-linear-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white h-12 font-bold">
+                            {statusLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save Updates"}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
@@ -203,19 +198,17 @@ export default function AdminDashboardClient({ user, initialReports = [], adminP
     )
 }
 
-// --- BEAUTIFUL SUB-COMPONENTS ---
-
 function StatCard({ label, value, icon: Icon, color, bg }) {
     return (
         <Card className="bg-slate-900/40 border-white/5 hover:border-white/10 transition-all group overflow-hidden relative">
-            <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-            <CardContent className="p-6 flex items-center justify-between relative z-10">
+            <div className="absolute inset-0 bg-linear-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+            <CardContent className="p-5 flex items-center justify-between relative z-10">
                 <div>
-                    <p className="text-sm font-medium text-slate-400">{label}</p>
+                    <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">{label}</p>
                     <div className="text-3xl font-bold text-white mt-1">{value}</div>
                 </div>
-                <div className={`h-12 w-12 rounded-full ${bg} ${color} flex items-center justify-center`}>
-                    <Icon className="h-6 w-6" />
+                <div className={`h-10 w-10 rounded-full ${bg} ${color} flex items-center justify-center`}>
+                    <Icon className="h-5 w-5" />
                 </div>
             </CardContent>
         </Card>
@@ -223,11 +216,11 @@ function StatCard({ label, value, icon: Icon, color, bg }) {
 }
 
 function ReportCard({ report, onManage, onView }) {
-    // 🔹 Image handling: Prefer array, fallback to old field
+    // FIX: Image handling
     const displayImage = report.images?.length > 0 ? report.images[0].url : report.imageUrl;
 
     const statusConfig = {
-        PENDING: { color: "text-yellow-400", bg: "bg-yellow-400/10", border: "border-yellow-400/20", label: "Pending Review" },
+        PENDING: { color: "text-yellow-400", bg: "bg-yellow-400/10", border: "border-yellow-400/20", label: "Pending" },
         IN_PROGRESS: { color: "text-blue-400", bg: "bg-blue-400/10", border: "border-blue-400/20", label: "In Progress" },
         RESOLVED: { color: "text-green-400", bg: "bg-green-400/10", border: "border-green-400/20", label: "Resolved" },
         REJECTED: { color: "text-red-400", bg: "bg-red-400/10", border: "border-red-400/20", label: "Rejected" }
@@ -236,8 +229,7 @@ function ReportCard({ report, onManage, onView }) {
     const config = statusConfig[report.status] || statusConfig.PENDING;
 
     return (
-        <div className="group relative flex flex-col bg-slate-900/60 border border-white/10 rounded-xl overflow-hidden hover:border-orange-500/30 transition-all duration-300 hover:shadow-2xl hover:shadow-orange-900/10">
-            {/* Image Section */}
+        <div className="group relative flex flex-col bg-slate-900/60 border border-white/10 rounded-xl overflow-hidden hover:border-orange-500/30 transition-all duration-300 hover:shadow-2xl hover:shadow-orange-900/10 h-full">
             <div className="relative h-48 w-full bg-slate-950 overflow-hidden">
                 {displayImage ? (
                     <img 
@@ -251,15 +243,12 @@ function ReportCard({ report, onManage, onView }) {
                         <ImageIcon className="h-10 w-10 text-slate-700" />
                     </div>
                 )}
-                
-                {/* Status Badge */}
-                <div className={`absolute top-3 right-3 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider backdrop-blur-md border ${config.bg} ${config.color} ${config.border} flex items-center gap-1.5 shadow-lg`}>
+                <div className={`absolute top-3 right-3 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider backdrop-blur-md border ${config.bg} ${config.color} ${config.border} flex items-center gap-1.5 shadow-lg`}>
                     <span className={`w-1.5 h-1.5 rounded-full ${config.color.replace('text', 'bg')} animate-pulse`}></span>
                     {config.label}
                 </div>
             </div>
 
-            {/* Content Section */}
             <div className="p-5 flex-1 flex flex-col">
                 <div className="flex items-center justify-between mb-2">
                     <span className="text-[10px] font-mono text-slate-500 bg-white/5 px-2 py-0.5 rounded border border-white/5">#{report.reportId}</span>
@@ -268,19 +257,19 @@ function ReportCard({ report, onManage, onView }) {
                     </span>
                 </div>
 
-                <h3 className="text-lg font-bold text-white leading-tight mb-2 line-clamp-1 group-hover:text-orange-400 transition-colors">
+                <h3 className="text-base font-bold text-white leading-tight mb-2 line-clamp-1 group-hover:text-orange-400 transition-colors">
                     {report.title}
                 </h3>
                 
-                <p className="text-sm text-slate-400 line-clamp-2 mb-4 flex-1">
+                <p className="text-xs text-slate-400 line-clamp-2 mb-4 flex-1">
                     {report.description}
                 </p>
 
                 <div className="flex items-center gap-2 mt-auto pt-4 border-t border-white/5">
-                    <Button onClick={onView} variant="ghost" size="sm" className="flex-1 text-slate-300 hover:text-white hover:bg-white/5 h-9 text-xs">
-                        View Details
+                    <Button onClick={onView} variant="ghost" size="sm" className="flex-1 text-slate-300 hover:text-white hover:bg-white/5 h-8 text-xs">
+                        Details
                     </Button>
-                    <Button onClick={onManage} size="sm" className="flex-1 bg-white/5 text-white hover:bg-orange-600 hover:text-white h-9 text-xs border border-white/10 transition-colors">
+                    <Button onClick={onManage} size="sm" className="flex-1 bg-white/5 text-white hover:bg-orange-600 hover:text-white h-8 text-xs border border-white/10 transition-colors">
                         Manage <ChevronRight className="h-3 w-3 ml-1" />
                     </Button>
                 </div>

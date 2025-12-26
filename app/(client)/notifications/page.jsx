@@ -2,7 +2,6 @@ import { checkUser } from "@/lib/checkUser"
 import { redirect } from "next/navigation"
 import { getAllNotifications, markAllAsRead } from "@/actions/notificationActions"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
 import { Bell, CheckCircle2, AlertCircle, Info, Clock, Check, ArrowRight } from "lucide-react"
 import { formatDistanceToNow } from "date-fns"
 import Link from "next/link"
@@ -32,8 +31,8 @@ export default async function NotificationsPage() {
             
             {/* Background Effects */}
             <div className="fixed inset-0 z-0 pointer-events-none">
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_var(--tw-gradient-stops))] from-slate-900 via-slate-950 to-black"></div>
-                <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-orange-500/5 rounded-full blur-[120px]"></div>
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,var(--tw-gradient-stops))] from-slate-900 via-slate-950 to-black"></div>
+                <div className="absolute top-0 right-0 w-125 h-125 bg-orange-500/5 rounded-full blur-[120px]"></div>
                 <div className="absolute inset-0 bg-[url('/grid-pattern.svg')] opacity-[0.03]"></div>
                 <FloatingParticles />
             </div>

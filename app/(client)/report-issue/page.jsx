@@ -22,11 +22,11 @@ export default async function ReportIssuePage() {
              {/* --- BACKGROUND LAYER --- */}
              <div className="fixed inset-0 z-0 pointer-events-none">
                 {/* 1. Deep Gradient Mesh */}
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_10%,_var(--tw-gradient-stops))] from-slate-900 via-slate-950 to-black"></div>
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_10%,var(--tw-gradient-stops))] from-slate-900 via-slate-950 to-black"></div>
                 
                 {/* 2. Colorful Orbs */}
-                <div className="absolute top-[10%] right-[5%] w-[600px] h-[600px] bg-orange-600/10 rounded-full blur-[120px] animate-pulse"></div>
-                <div className="absolute bottom-[10%] left-[5%] w-[500px] h-[500px] bg-blue-600/10 rounded-full blur-[120px] animate-pulse delay-1000"></div>
+                <div className="absolute top-[10%] right-[5%] w-150 h-150 bg-orange-600/10 rounded-full blur-[120px] animate-pulse"></div>
+                <div className="absolute bottom-[10%] left-[5%] w-125 h-125 bg-blue-600/10 rounded-full blur-[120px] animate-pulse delay-1000"></div>
                 
                 {/* 3. The Grid Texture */}
                 <div className="absolute inset-0 bg-[url('/grid-pattern.svg')] opacity-[0.03]"></div>
@@ -48,7 +48,7 @@ export default async function ReportIssuePage() {
                             
                             <h1 className="text-4xl md:text-6xl font-bold text-white leading-tight">
                                 Make your city <br />
-                                <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-400 via-amber-500 to-orange-600">
+                                <span className="text-transparent bg-clip-text bg-linear-to-r from-orange-400 via-amber-500 to-orange-600">
                                     shine again.
                                 </span>
                             </h1>
@@ -59,7 +59,7 @@ export default async function ReportIssuePage() {
                         </div>
 
                         {/* Visual Timeline Steps */}
-                        <div className="space-y-8 relative before:absolute before:left-[19px] before:top-2 before:bottom-2 before:w-[2px] before:bg-gradient-to-b before:from-orange-500/50 before:to-transparent">
+                        <div className="space-y-8 relative before:absolute before:left-4.75 before:top-2 before:bottom-2 before:w-0.5 before:bg-lienar-to-b before:from-orange-500/50 before:to-transparent">
                             {[
                                 { icon: MapPin, title: "Pin Location", desc: "Use GPS to lock the exact spot." },
                                 { icon: CheckCircle2, title: "Select Authority", desc: "Route to the correct department." },

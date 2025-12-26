@@ -3,8 +3,6 @@
 import { db } from "@/lib/prisma"
 import { checkUser } from "@/lib/checkUser"
 import { revalidatePath } from "next/cache"
-// Keep imports if files exist
-import { detectPriority } from "@/lib/priorityDetector" 
 import { sendNotification } from "@/lib/notifications"
 
 export async function createReport(formData) {
@@ -22,7 +20,7 @@ export async function createReport(formData) {
         const cityId = formData.get("cityId")
         const departmentId = formData.get("departmentId")
         const address = formData.get("address")
-        
+
         // 2. Category Logic
         const selectedCategory = formData.get("category")
         const customCategory = formData.get("customCategory")
@@ -43,7 +41,7 @@ export async function createReport(formData) {
             try {
                 const { findOrCreateArea } = await import("@/lib/areaNormalizer").catch(() => ({}))
                 if (findOrCreateArea) area = await findOrCreateArea(db, cityId, address)
-            } catch (e) {}
+            } catch (e) { }
         }
 
         // 5. Create Report Record
@@ -62,7 +60,7 @@ export async function createReport(formData) {
                 city: { connect: { id: cityId } },
                 department: { connect: { id: departmentId } },
                 ...(area && { area: { connect: { id: area.id } } }),
-                
+
                 // Tags
                 ...(formData.getAll("tags").length > 0 && {
                     tags: {
@@ -81,19 +79,19 @@ export async function createReport(formData) {
 
         // 6. 🟢 IMAGE TO DATABASE LOGIC (Base64)
         const imageFiles = formData.getAll("images")
-        
+
         if (imageFiles && imageFiles.length > 0) {
             for (let i = 0; i < imageFiles.length; i++) {
                 const file = imageFiles[i]
-                
+
                 if (file.size > 0) {
                     // Convert file to Buffer
                     const buffer = Buffer.from(await file.arrayBuffer());
-                    
+
                     // Convert Buffer to Base64 String
                     const base64Data = buffer.toString("base64");
                     const fileType = file.type || "image/jpeg"; // Default to jpeg if type missing
-                    
+
                     // Create the Data URI (e.g. "data:image/png;base64,iVBOR...")
                     // This string renders directly in <img src="..." />
                     const base64Url = `data:${fileType};base64,${base64Data}`;
@@ -119,12 +117,12 @@ export async function createReport(formData) {
         }
 
         if (sendNotification) {
-            await sendNotification(user.id, "Report Submitted", `ID: ${reportId}`, reportId, detectedPriority).catch(() => {})
+            await sendNotification(user.id, "Report Submitted", `ID: ${reportId}`, reportId, detectedPriority).catch(() => { })
         }
 
         revalidatePath('/admin')
         revalidatePath('/status')
-        
+
         return { success: true, reportId }
 
     } catch (error) {
