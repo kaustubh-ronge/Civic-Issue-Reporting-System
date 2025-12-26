@@ -5,44 +5,44 @@ import { usePathname } from "next/navigation"
 import { UserButton, SignInButton, SignedIn, SignedOut } from "@clerk/nextjs"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from "@/components/ui/sheet"
-import { ShieldCheck, Menu, LayoutDashboard } from "lucide-react"
+import { ShieldCheck, Menu, LayoutDashboard, ChevronRight } from "lucide-react"
 import { useState, useEffect } from "react"
 import { motion } from "framer-motion"
 import NotificationBell from "../NotificationBell"
 
 export default function HeaderClient({ user }) {
+    // 1. ALL HOOKS MUST RUN FIRST (Unconditionally)
     const pathname = usePathname()
     const [scrolled, setScrolled] = useState(false)
-    
-    // 1. CRITICAL FIX: Hide this header on Admin pages to prevent double headers
-    // The AdminLayout has its own dedicated header.
-    if (pathname.startsWith('/admin')) {
-        return null; 
-    }
 
-    const isAdmin = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN';
-
-    // Handle scroll effect
     useEffect(() => {
         const handleScroll = () => setScrolled(window.scrollY > 20)
         window.addEventListener("scroll", handleScroll)
         return () => window.removeEventListener("scroll", handleScroll)
     }, [])
 
+    // 2. NOW we can do conditional logic
+    const isAdmin = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN';
     const isActive = (path) => pathname === path
 
-    // Standard Navigation
-    const navItems = [
-        { name: "Home", href: "/" },
-        { name: "Report Issue", href: "/report-issue" },
-        { name: "Live Status", href: "/status" },
-    ];
-
-    // Add Admin Console link if user is admin
-    if (isAdmin) {
-        navItems.push({ name: "Admin Console", href: "/admin" });
+    // 3. NOW we can return early if needed (After hooks are done)
+    if (pathname?.startsWith('/admin')) {
+        return null; 
     }
 
+    // 4. Navigation Data
+    const navItems = isAdmin 
+        ? [
+            { name: "Home", href: "/" },
+            { name: "Console", href: "/admin" },
+          ]
+        : [
+            { name: "Home", href: "/" },
+            { name: "Report Issue", href: "/report-issue" },
+            { name: "Live Status", href: "/status" },
+          ];
+
+    // 5. Final Render
     return (
         <motion.header 
             initial={{ y: -100 }}
@@ -56,7 +56,7 @@ export default function HeaderClient({ user }) {
         >
             <div className="container mx-auto px-6 md:px-12 flex items-center justify-between">
                 
-                {/* --- Brand Logo --- */}
+                {/* --- LOGO --- */}
                 <Link href="/" className="flex items-center gap-3 group">
                     <motion.div 
                         whileHover={{ rotate: 10, scale: 1.1 }}
@@ -69,13 +69,20 @@ export default function HeaderClient({ user }) {
                         <span className="text-xl font-bold tracking-tight text-white leading-none">
                             Civic<span className="text-orange-500">Connect</span>
                         </span>
-                        <span className="text-[10px] font-medium text-slate-400 tracking-wider uppercase opacity-0 -translate-y-2 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-300">
-                            Secure Reporting
-                        </span>
+                        
+                        {isAdmin ? (
+                            <span className="text-[10px] font-bold text-orange-400 tracking-widest uppercase opacity-0 -translate-y-2 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-300">
+                                Official Access
+                            </span>
+                        ) : (
+                            <span className="text-[10px] font-medium text-slate-400 tracking-wider uppercase opacity-0 -translate-y-2 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-300">
+                                Secure Reporting
+                            </span>
+                        )}
                     </div>
                 </Link>
 
-                {/* --- Desktop Navigation --- */}
+                {/* --- DESKTOP NAV --- */}
                 <nav className="hidden md:flex items-center gap-1 rounded-full border border-white/5 bg-white/5 p-1 backdrop-blur-md">
                     {navItems.map((link) => (
                         <Link 
@@ -100,16 +107,22 @@ export default function HeaderClient({ user }) {
                     ))}
                 </nav>
 
-                {/* --- Right Side Actions --- */}
+                {/* --- RIGHT ACTIONS --- */}
                 <div className="flex items-center gap-4">
                     
+                    {isAdmin && (
+                        <Link href="/admin" className="hidden lg:block">
+                            <Button size="sm" className="bg-orange-500/10 hover:bg-orange-600 text-orange-400 hover:text-white border border-orange-500/20 transition-all">
+                                <LayoutDashboard className="h-4 w-4 mr-2" /> Admin Console
+                            </Button>
+                        </Link>
+                    )}
+
+                    <div className="h-6 w-px bg-white/10 hidden sm:block"></div>
+
                     <SignedIn>
-                        {/* Notification Bell */}
                         {user && <NotificationBell userId={user.id} />}
                         
-                        <div className="h-6 w-px bg-white/10 hidden sm:block"></div>
-
-                        {/* User Profile */}
                         <UserButton 
                             afterSignOutUrl="/"
                             appearance={{ elements: { avatarBox: "h-9 w-9 ring-2 ring-white/10" }}}
@@ -119,14 +132,14 @@ export default function HeaderClient({ user }) {
                     <SignedOut>
                         <SignInButton mode="modal">
                             <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                                <Button className="bg-white text-slate-950 hover:bg-slate-200 font-semibold">
+                                <Button className="bg-white text-slate-950 hover:bg-slate-200 font-semibold shadow-lg shadow-white/10">
                                     Sign In
                                 </Button>
                             </motion.div>
                         </SignInButton>
                     </SignedOut>
 
-                    {/* Mobile Menu Trigger */}
+                    {/* --- MOBILE MENU --- */}
                     <div className="md:hidden">
                         <Sheet>
                             <SheetTrigger asChild>
@@ -140,19 +153,21 @@ export default function HeaderClient({ user }) {
                                         <ShieldCheck className="h-6 w-6 text-orange-500" />
                                         <span className="font-bold">CivicConnect</span>
                                     </SheetTitle>
+                                    {isAdmin && <p className="text-xs text-orange-400 font-bold uppercase tracking-widest mt-1">Official Account</p>}
                                 </SheetHeader>
                                 <div className="flex flex-col gap-4">
                                     {navItems.map((link) => (
                                         <Link 
                                             key={link.href} 
                                             href={link.href}
-                                            className={`px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
+                                            className={`px-4 py-3 rounded-lg text-sm font-medium transition-colors flex items-center justify-between ${
                                                 isActive(link.href) 
                                                 ? "bg-orange-600 text-white" 
                                                 : "text-slate-300 hover:bg-white/5 hover:text-white"
                                             }`}
                                         >
                                             {link.name}
+                                            {isActive(link.href) && <ChevronRight className="h-4 w-4" />}
                                         </Link>
                                     ))}
                                     

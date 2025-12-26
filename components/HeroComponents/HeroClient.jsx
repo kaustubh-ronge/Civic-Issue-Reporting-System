@@ -40,13 +40,13 @@ export default function HeroClient({ user }) {
                 <motion.div 
                     variants={blobAnimation}
                     animate="animate"
-                    className="absolute -top-[10%] -left-[10%] w-[800px] h-[800px] bg-orange-600/20 rounded-full blur-[120px]"
+                    className="absolute -top-[10%] -left-[10%] w-200 h-200 bg-orange-600/20 rounded-full blur-[120px]"
                 />
                 <motion.div 
                     variants={blobAnimation}
                     animate="animate"
                     transition={{ delay: 4 }}
-                    className="absolute top-[20%] -right-[10%] w-[600px] h-[600px] bg-blue-600/10 rounded-full blur-[100px]"
+                    className="absolute top-[20%] -right-[10%] w-150 h-150 bg-blue-600/10 rounded-full blur-[100px]"
                 />
                 <div className="absolute inset-0 bg-[url('/grid-pattern.svg')] opacity-[0.04]"></div>
             </div>
@@ -76,14 +76,14 @@ export default function HeroClient({ user }) {
                             {isAdmin ? (
                                 <>
                                     Manage City <br />
-                                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-amber-600">
+                                    <span className="text-transparent bg-clip-text bg-linear-to-r from-orange-400 to-amber-600">
                                         Operations.
                                     </span>
                                 </>
                             ) : (
                                 <>
                                     Fix Your City <br />
-                                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-amber-600">
+                                    <span className="text-transparent bg-clip-text bg-linear-to-r from-orange-400 to-amber-600">
                                         anonymously.
                                     </span>
                                 </>
@@ -149,7 +149,7 @@ export default function HeroClient({ user }) {
                         transition={{ duration: 0.8, delay: 0.4 }}
                         className="hidden lg:block relative"
                     >
-                        <div className="absolute inset-0 bg-gradient-to-tr from-orange-500/20 to-blue-500/20 rounded-full blur-3xl transform rotate-12"></div>
+                        <div className="absolute inset-0 bg-linear-to-tr from-orange-500/20 to-blue-500/20 rounded-full blur-3xl transform rotate-12"></div>
                         <motion.div whileHover={{ y: -5 }}>
                             <Card className="relative bg-slate-900/60 backdrop-blur-xl border-white/10 shadow-2xl max-w-md mx-auto text-white">
                                 <CardHeader className="border-b border-white/10 pb-4">
