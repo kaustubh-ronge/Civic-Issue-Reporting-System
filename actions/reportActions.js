@@ -14,22 +14,29 @@ export async function createReport(formData) {
         const dbUser = await db.user.findUnique({ where: { id: user.id }, select: { isBanned: true } })
         if (dbUser?.isBanned) return { success: false, error: "Account banned." }
 
-        // 1. Basic Fields
-        const title = formData.get("title")
-        const description = formData.get("description")
+        // 1. Basic Fields & Validation
+        const title = (formData.get("title") || "").toString().trim()
+        const description = (formData.get("description") || "").toString().trim()
         const cityId = formData.get("cityId")
         const departmentId = formData.get("departmentId")
         const address = formData.get("address")
 
+        // Validate required inputs early
+        if (!title || title.length < 5) return { success: false, error: "Title is required (min 5 characters)." }
+        if (!description || description.length < 10) return { success: false, error: "Description is required (min 10 characters)." }
+        if (!cityId || !departmentId) return { success: false, error: "City and Department are required." }
+
         // 2. Category Logic
         const selectedCategory = formData.get("category")
         const customCategory = formData.get("customCategory")
-        let finalCategory = selectedCategory === "Other" && customCategory ? customCategory : selectedCategory;
+        let finalCategory = selectedCategory === "Other" && customCategory ? customCategory.toString().trim() : selectedCategory
 
         // 3. Priority & Location
         const priority = formData.get("priority") === "AUTO" ? null : formData.get("priority")
-        const lat = parseFloat(formData.get("lat")) || 0
-        const lng = parseFloat(formData.get("lng")) || 0
+        let lat = parseFloat(formData.get("lat"))
+        let lng = parseFloat(formData.get("lng"))
+        lat = Number.isFinite(lat) ? lat : null
+        lng = Number.isFinite(lng) ? lng : null
         const detectedPriority = priority || "MEDIUM"
 
         const reportId = `RPT-${Math.floor(1000 + Math.random() * 9000)}`
@@ -44,12 +51,15 @@ export async function createReport(formData) {
             } catch (e) { }
         }
 
+        // Tags (limit to 10 sanitized tags)
+        const tags = (formData.getAll("tags") || []).map(t => t.toString().trim()).filter(Boolean).slice(0, 10)
+
         // 5. Create Report Record
         const report = await db.report.create({
             data: {
                 reportId,
                 title,
-                description: `${description}\n\n📍 Location: ${address}`,
+                description: address ? `${description}\n\n📍 Location: ${address}` : description,
                 status: "PENDING",
                 priority: detectedPriority,
                 category: finalCategory,
@@ -62,9 +72,9 @@ export async function createReport(formData) {
                 ...(area && { area: { connect: { id: area.id } } }),
 
                 // Tags
-                ...(formData.getAll("tags").length > 0 && {
+                ...(tags.length > 0 && {
                     tags: {
-                        connectOrCreate: formData.getAll("tags").map(tag => ({
+                        connectOrCreate: tags.map(tag => ({
                             where: { name: tag },
                             create: { name: tag }
                         }))
@@ -77,14 +87,14 @@ export async function createReport(formData) {
             }
         })
 
-        // 6. 🟢 IMAGE TO DATABASE LOGIC (Base64)
-        const imageFiles = formData.getAll("images")
+        // 6. 🟢 IMAGE TO DATABASE LOGIC (Base64) - limit to 5 images
+        const imageFiles = (formData.getAll("images") || []).slice(0, 5)
 
         if (imageFiles && imageFiles.length > 0) {
             for (let i = 0; i < imageFiles.length; i++) {
                 const file = imageFiles[i]
 
-                if (file.size > 0) {
+                if (file && file.size > 0) {
                     // Convert file to Buffer
                     const buffer = Buffer.from(await file.arrayBuffer());
 
@@ -134,7 +144,7 @@ export async function createReport(formData) {
 // ... (Rest of the file: getReportByReportId, getUserReports remains the same)
 export async function getReportByReportId(reportId) {
     try {
-        const report = await db.report.findUnique({
+        let report = await db.report.findUnique({
             where: { reportId },
             include: {
                 author: { select: { firstName: true, email: true } },
@@ -147,6 +157,16 @@ export async function getReportByReportId(reportId) {
             }
         })
         if (!report) return { success: false, error: "Not found" }
+
+        // Auto-close if pending verification expired
+        if (report.status === 'PENDING_VERIFICATION' && report.pendingVerificationExpiresAt && new Date(report.pendingVerificationExpiresAt) < new Date()) {
+            const updated = await db.report.update({
+                where: { id: report.id },
+                data: { status: 'RESOLVED', pendingVerificationExpiresAt: null, updates: { create: { oldStatus: 'PENDING_VERIFICATION', newStatus: 'RESOLVED', note: 'Auto-closed after pending verification window', updatedBy: 'system' } } }
+            })
+            report = { ...report, status: 'RESOLVED' }
+        }
+
         return { success: true, report }
     } catch (error) { return { success: false, error: "Fetch failed" } }
 }
@@ -162,4 +182,96 @@ export async function getUserReports() {
         })
         return { success: true, reports }
     } catch (error) { return { success: false, error: "Fetch failed" } }
+}
+
+// --- Resolution confirmation and reopen actions ---
+export async function confirmResolution(reportId) {
+    try {
+        const user = await checkUser()
+        if (!user) return { success: false, error: "You must be logged in." }
+
+        const report = await db.report.findFirst({ where: { OR: [{ id: reportId }, { reportId: reportId }] } })
+        if (!report) return { success: false, error: "Report not found" }
+        if (report.authorId !== user.id) return { success: false, error: "Unauthorized" }
+        if (report.status !== 'PENDING_VERIFICATION') return { success: false, error: "Report not awaiting verification" }
+
+        await db.report.update({
+            where: { id: report.id },
+            data: {
+                status: 'RESOLVED',
+                pendingVerificationExpiresAt: null,
+                updates: { create: { oldStatus: 'PENDING_VERIFICATION', newStatus: 'RESOLVED', note: 'Reporter confirmed fix', updatedBy: user.id } }
+            }
+        })
+
+        // Notify admins
+        try {
+            const admins = await db.adminProfile.findMany({ where: { departmentId: report.departmentId }, include: { user: true } })
+            for (const a of admins) {
+                await sendNotification(a.userId, 'Report Confirmed', `Reporter confirmed resolution for ${report.reportId}` , report.reportId)
+            }
+        } catch (e) { }
+
+        revalidatePath(`/report/${report.reportId}`)
+        revalidatePath('/admin')
+        return { success: true }
+    } catch (error) {
+        console.error('Confirm Resolution Error:', error)
+        return { success: false, error: 'Failed to confirm' }
+    }
+}
+
+export async function reopenReport(reportId, reason = '') {
+    try {
+        const user = await checkUser()
+        if (!user) return { success: false, error: "You must be logged in." }
+
+        const report = await db.report.findFirst({ where: { OR: [{ id: reportId }, { reportId: reportId }] } })
+        if (!report) return { success: false, error: "Report not found" }
+        if (report.authorId !== user.id) return { success: false, error: "Unauthorized" }
+        if (report.status !== 'PENDING_VERIFICATION') return { success: false, error: "Report not awaiting verification" }
+
+        await db.report.update({
+            where: { id: report.id },
+            data: {
+                status: 'IN_PROGRESS',
+                priority: 'HIGH',
+                pendingVerificationExpiresAt: null,
+                updates: { create: { oldStatus: 'PENDING_VERIFICATION', newStatus: 'IN_PROGRESS', note: reason || 'Reporter reopened the ticket', updatedBy: user.id } }
+            }
+        })
+
+        // Notify admins
+        try {
+            const admins = await db.adminProfile.findMany({ where: { departmentId: report.departmentId }, include: { user: true } })
+            for (const a of admins) {
+                await sendNotification(a.userId, 'Report Reopened', `Reporter reopened ticket ${report.reportId}` , report.reportId)
+            }
+        } catch (e) { }
+
+        revalidatePath(`/report/${report.reportId}`)
+        revalidatePath('/admin')
+        return { success: true }
+    } catch (error) {
+        console.error('Reopen Error:', error)
+        return { success: false, error: 'Failed to reopen' }
+    }
+}
+
+// Auto-close expired pending verifications (can be called by a cron job)
+export async function autoCloseExpiredVerifications() {
+    try {
+        const now = new Date()
+        const toClose = await db.report.findMany({ where: { status: 'PENDING_VERIFICATION', pendingVerificationExpiresAt: { lt: now } } })
+        for (const r of toClose) {
+            await db.report.update({ where: { id: r.id }, data: { status: 'RESOLVED', pendingVerificationExpiresAt: null, updates: { create: { oldStatus: 'PENDING_VERIFICATION', newStatus: 'RESOLVED', note: 'Auto-closed after pending verification window', updatedBy: 'system' } } } })
+            try {
+                await sendNotification(r.authorId, 'Report Auto-Closed', `Your report ${r.reportId} was auto-closed after verification window.`, r.reportId)
+            } catch (e) { }
+        }
+        return { success: true, closed: toClose.length }
+    } catch (error) {
+        console.error('Auto close error:', error)
+        return { success: false, error: 'Failed to auto-close' }
+    }
 }

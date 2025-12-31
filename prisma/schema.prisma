@@ -20,9 +20,11 @@ enum Role {
 enum ReportStatus {
   PENDING
   IN_PROGRESS
+  PENDING_VERIFICATION // Awaiting confirmation from reporter
   RESOLVED
   REJECTED    // For fake/invalid reports
 }
+
 
 enum Priority {
   LOW
@@ -68,8 +70,7 @@ model User {
   // Relations
   reports      Report[]
   adminProfile AdminProfile? // Only exists if role is ADMIN
-  comments     Comment[]
-  verifications Verification[]
+verifications Verification[]
   notifications Notification[]
   
   createdAt    DateTime @default(now())
@@ -81,17 +82,20 @@ model AdminProfile {
   id             String       @id @default(cuid())
   user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId         String       @unique
-  
+
   department     Department   @relation(fields: [departmentId], references: [id])
   departmentId   String
-  
+
   // New Real-World Fields
   designation    String?      // e.g. "Zonal Officer", "Junior Engineer"
   employeeId     String?      // e.g. "GOV-MH-8821"
   phone          String?      // Official Contact
-  
+
   isVerified     Boolean      @default(false) 
 }
+
+// Comments on Reports
+// (Removed) -- Comments feature has been deprecated and removed from the schema.
 
 // --- LOCATION & HIERARCHY ---
 // Structure: State -> City/Corp -> Area/Zone -> Department
@@ -189,6 +193,7 @@ model Report {
   // Verification
   isVerified     Boolean  @default(false)
   verificationCount Int   @default(0)
+  pendingVerificationExpiresAt DateTime? // When pending verification should auto-close
   
   // Sharing
   shareToken   String?   @unique // For public sharing
@@ -196,7 +201,6 @@ model Report {
   
   // Relations
   images       ReportImage[]
-  comments     Comment[]
   updates      ReportUpdate[]
   verifications Verification[]
   
@@ -228,18 +232,7 @@ model Tag {
 }
 
 // Comments on Reports
-model Comment {
-  id        String   @id @default(cuid())
-  report    Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
-  reportId  String
-  author    User     @relation(fields: [authorId], references: [id])
-  authorId  String
-  content   String
-  isPublic  Boolean  @default(true)
-  isModerated Boolean @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
+// (Removed) The Comment model has been deprecated and removed. Use report updates or admin notes for communication and audit trails.
 
 // Status Update History / Timeline
 model ReportUpdate {

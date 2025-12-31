@@ -9,76 +9,83 @@ export async function verifyReport(reportId) {
         const user = await checkUser()
         if (!user) return { success: false, error: "You must be logged in." }
 
-        // Check if already verified by this user
-        const existing = await db.verification.findUnique({
-            where: {
-                reportId_verifierId: {
-                    reportId,
-                    verifierId: user.id
-                }
-            }
+        // 1. Find the report to get internal ID and current status
+        const report = await db.report.findFirst({
+            where: { OR: [{ id: reportId }, { reportId: reportId }] },
+            select: { id: true, reportId: true, authorId: true, isVerified: true }
         })
 
-        if (existing) {
-            return { success: false, error: "You have already verified this report" }
-        }
+        if (!report) return { success: false, error: "Report not found" }
 
-        // Create verification
-        await db.verification.create({
-            data: {
-                reportId,
-                verifierId: user.id,
-                isVerified: true
-            }
-        })
-
-        // Get updated verification count
-        const verificationCount = await db.verification.count({
-            where: { reportId, isVerified: true }
-        })
-        
-        // Mark as verified if 3+ verifications
-        const report = await db.report.update({
-            where: { id: reportId },
-            data: {
-                verificationCount,
-                isVerified: verificationCount >= 3
-            },
-            include: {
-                author: true
-            }
-        })
-
-        // Award reputation points to verifier
-        await db.user.update({
-            where: { id: user.id },
-            data: {
-                reputationPoints: {
-                    increment: 1
-                }
-            }
-        })
-
-        // Award reputation to report author if verified
-        if (verificationCount >= 3) {
-            await db.user.update({
-                where: { id: report.authorId },
-                data: {
-                    verifiedReports: {
-                        increment: 1
-                    },
-                    reputationPoints: {
-                        increment: 5
-                    }
+        // 2. Transaction to ensure data integrity
+        const result = await db.$transaction(async (tx) => {
+            // Check for existing verification
+            const existing = await tx.verification.findUnique({
+                where: {
+                    reportId_verifierId: { reportId: report.id, verifierId: user.id }
                 }
             })
-        }
 
-        revalidatePath(`/report/${reportId}`)
+            if (existing) {
+                throw new Error("You have already verified this report")
+            }
+
+            // Create verification record
+            await tx.verification.create({
+                data: {
+                    reportId: report.id,
+                    verifierId: user.id,
+                    isVerified: true
+                }
+            })
+
+            // Award points to the verifier
+            await tx.user.update({
+                where: { id: user.id },
+                data: { reputationPoints: { increment: 1 } }
+            })
+
+            // Calculate new verification count
+            const verificationCount = await tx.verification.count({
+                where: { reportId: report.id, isVerified: true }
+            })
+
+            // Threshold Logic: If >= 3 AND not yet verified, update status and reward author
+            if (verificationCount >= 3 && !report.isVerified) {
+                await tx.report.update({
+                    where: { id: report.id },
+                    data: { verificationCount, isVerified: true }
+                })
+
+                await tx.user.update({
+                    where: { id: report.authorId },
+                    data: {
+                        verifiedReports: { increment: 1 },
+                        reputationPoints: { increment: 5 }
+                    }
+                })
+            } else {
+                // Otherwise just update the count
+                await tx.report.update({
+                    where: { id: report.id },
+                    data: { verificationCount }
+                })
+            }
+
+            return { success: true, reportId: report.reportId }
+        })
+
+        revalidatePath(`/report/${result.reportId}`)
         return { success: true }
+
     } catch (error) {
-        console.error("Verify Report Error:", error)
-        return { success: false, error: "Failed to verify report" }
+        console.error("Verification Error:", error)
+        // Return a clean error message to the client
+        return { 
+            success: false, 
+            error: error.message === "You have already verified this report" 
+                ? error.message 
+                : "Failed to verify report. Please try again." 
+        }
     }
 }
-

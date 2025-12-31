@@ -51,7 +51,7 @@ export async function getAdminReports() {
 export async function updateReportStatus(reportId, newStatus, adminNote, priority = null, estimatedCost = null) {
     try {
         const user = await checkUser()
-        if (user.role !== 'ADMIN' && user.role !== 'SUPER_ADMIN') {
+        if (!user || (user.role !== 'ADMIN' && user.role !== 'SUPER_ADMIN')) {
             return { success: false, error: "Unauthorized" }
         }
 
@@ -69,8 +69,9 @@ export async function updateReportStatus(reportId, newStatus, adminNote, priorit
         const oldStatus = report.status
         
         // Prepare update data
+        // If admin marks as RESOLVED, move to PENDING_VERIFICATION and set an expiry window
+        let targetStatus = newStatus
         const updateData = {
-            status: newStatus,
             adminNote: adminNote,
             updates: {
                 create: {
@@ -80,6 +81,14 @@ export async function updateReportStatus(reportId, newStatus, adminNote, priorit
                     updatedBy: user.id
                 }
             }
+        }
+
+        if (newStatus === 'RESOLVED') {
+            targetStatus = 'PENDING_VERIFICATION'
+            updateData.status = targetStatus
+            updateData.pendingVerificationExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days
+        } else {
+            updateData.status = targetStatus
         }
         
         // Add priority if provided
@@ -104,6 +113,7 @@ export async function updateReportStatus(reportId, newStatus, adminNote, priorit
             const statusMessages = {
                 'PENDING': 'is pending review',
                 'IN_PROGRESS': 'is now in progress',
+                'PENDING_VERIFICATION': 'is marked resolved and awaiting your confirmation',
                 'RESOLVED': 'has been resolved',
                 'REJECTED': 'has been rejected as fake'
             }
@@ -111,8 +121,8 @@ export async function updateReportStatus(reportId, newStatus, adminNote, priorit
             if (typeof sendNotification === 'function') {
                 await sendNotification(
                     report.authorId,
-                    `Report Status Updated: ${newStatus}`,
-                    `Your report "${report.title}" ${statusMessages[newStatus] || 'status has been updated'}. ${adminNote ? `Note: ${adminNote}` : ''}`,
+                    `Report Status Updated: ${targetStatus}`,
+                    `Your report "${report.title}" ${statusMessages[targetStatus] || 'status has been updated'}. ${adminNote ? `Note: ${adminNote}` : ''}`,
                     report.reportId,
                     report.priority
                 )

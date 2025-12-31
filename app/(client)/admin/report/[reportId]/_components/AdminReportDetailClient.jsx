@@ -119,6 +119,8 @@ export default function AdminReportDetailClient({ report, user, adminProfile }) 
                             </div>
                             <div className="space-y-2">
                                 <label className="text-sm font-medium text-slate-400">Admin Note</label>
+
+
                                 <Textarea value={adminNote} onChange={(e) => setAdminNote(e.target.value)} placeholder="Action taken..." className="bg-slate-950 border-white/10 text-white min-h-[120px]" />
                             </div>
                             <Button onClick={handleUpdateStatus} disabled={statusLoading} className="w-full bg-orange-600 hover:bg-orange-500 text-white">

@@ -16,7 +16,7 @@ import { formatDistanceToNow } from "date-fns"
 import AdminOnboarding from "./AdminOnboarding"
 import { motion, AnimatePresence } from "framer-motion"
 
-export default function AdminDashboardClient({ user, initialReports = [], adminProfile }) {
+export default function AdminDashboardClient({ user, initialReports = [], adminProfile, runAutoCloseAction = null }) {
     const router = useRouter()
     const [reports, setReports] = useState(initialReports)
     const [selectedReport, setSelectedReport] = useState(null)
@@ -71,6 +71,16 @@ export default function AdminDashboardClient({ user, initialReports = [], adminP
                         <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
                         Live Department Feed
                     </motion.div>
+
+                    <div className="hidden md:flex items-center gap-2">
+                        <a href="/admin/analytics/heatmap" className="text-xs bg-white/5 px-3 py-1 rounded border border-white/10 text-slate-300">Heatmap Analytics</a>
+                    </div>
+                    {/* Manual maintenance actions */}
+                    <div className="hidden md:flex items-center gap-2">
+                        <form action={runAutoCloseAction} className="inline-block">
+                            <Button type="submit" size="sm" className="text-xs bg-white/5 px-3 py-1 rounded border border-white/10 text-slate-300">Run Pending Verification Auto-Close</Button>
+                        </form>
+                    </div>
                     <h1 className="text-3xl md:text-4xl font-bold text-white tracking-tight">Overview</h1>
                     <div className="flex items-center gap-2 text-slate-400 text-sm">
                         <Badge variant="outline" className="text-orange-400 border-orange-400/20 bg-orange-400/10 px-3 py-0.5">
@@ -179,6 +189,8 @@ export default function AdminDashboardClient({ user, initialReports = [], adminP
                         </div>
                         <div className="space-y-2">
                             <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Official Response</label>
+                            {/* Canned suggestions */}
+
                             <Textarea 
                                 value={adminNote} 
                                 onChange={(e) => setAdminNote(e.target.value)} 
@@ -222,6 +234,7 @@ function ReportCard({ report, onManage, onView }) {
     const statusConfig = {
         PENDING: { color: "text-yellow-400", bg: "bg-yellow-400/10", border: "border-yellow-400/20", label: "Pending" },
         IN_PROGRESS: { color: "text-blue-400", bg: "bg-blue-400/10", border: "border-blue-400/20", label: "In Progress" },
+        PENDING_VERIFICATION: { color: "text-amber-300", bg: "bg-amber-400/10", border: "border-amber-400/20", label: "Pending Verification" },
         RESOLVED: { color: "text-green-400", bg: "bg-green-400/10", border: "border-green-400/20", label: "Resolved" },
         REJECTED: { color: "text-red-400", bg: "bg-red-400/10", border: "border-red-400/20", label: "Rejected" }
     }
