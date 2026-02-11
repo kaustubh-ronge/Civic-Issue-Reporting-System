@@ -1,23 +1,18 @@
-// /** @type {import('next').NextConfig} */
-// const nextConfig = {
-//   /* config options here */
-// };
-
-// export default nextConfig;
-
-
 /** @type {import('next').NextConfig} */
 const nextConfig = {
     experimental: {
+        // 1. This handles the Server Action limit
         serverActions: {
-            bodySizeLimit: '10mb', // Allow up to 10MB uploads
+            bodySizeLimit: '5000mb',
         },
+        // 2. This handles the Middleware/Proxy limit (Next.js 16 specific)
+        proxyClientMaxBodySize: '5000mb', 
     },
     images: {
         remotePatterns: [
             {
                 protocol: 'https',
-                hostname: '**', // Allow external images if you ever switch back
+                hostname: '**',
             },
         ],
     },

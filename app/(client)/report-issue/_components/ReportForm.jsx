@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
-import { Loader2, MapPin, UploadCloud, ShieldAlert, CheckCircle2, X, AlertCircle, AlertTriangle, Info, Zap, Droplets, Trash2, Bus, Construction, PenTool, Copy, ExternalLink, ImageIcon } from "lucide-react"
+import { Loader2, MapPin, UploadCloud, ShieldAlert, CheckCircle2, X, AlertCircle, AlertTriangle, Info, Zap, Droplets, Trash2, Bus, Construction, PenTool, Copy, ExternalLink, ImageIcon, Video } from "lucide-react"
 import { getDepartmentsByCity } from "@/actions/utilActions"
 import { createReport } from "@/actions/reportActions"
 import { toast } from "sonner"
@@ -50,6 +50,8 @@ export default function ReportForm({ cities }) {
     const [selectedDept, setSelectedDept] = useState("")
     const [locationData, setLocationData] = useState(null)
     const [imageFiles, setImageFiles] = useState([])
+    const [videoFiles, setVideoFiles] = useState([])
+    const [selectedCityName, setSelectedCityName] = useState("")
     
     // Category & Tag State
     const [selectedCategory, setSelectedCategory] = useState("")
@@ -62,6 +64,8 @@ export default function ReportForm({ cities }) {
     const handleCityChange = async (cityId) => {
         setSelectedCity(cityId)
         setSelectedDept("") 
+        const city = cities.find(c => c.id === cityId)
+        setSelectedCityName(city?.name || "")
         const res = await getDepartmentsByCity(cityId)
         if (res.success) setDepartments(res.depts)
     }
@@ -75,6 +79,17 @@ export default function ReportForm({ cities }) {
 
     const removeImage = (index) => {
         setImageFiles(prev => prev.filter((_, i) => i !== index))
+    }
+
+    const handleVideoChange = (e) => {
+        if (e.target.files) {
+            const files = Array.from(e.target.files)
+            setVideoFiles(prev => [...prev, ...files].slice(0, 2))
+        }
+    }
+
+    const removeVideo = (index) => {
+        setVideoFiles(prev => prev.filter((_, i) => i !== index))
     }
 
     const addTag = () => {
@@ -105,6 +120,7 @@ export default function ReportForm({ cities }) {
         
         tags.forEach(tag => formData.append("tags", tag))
         imageFiles.forEach((file) => formData.append("images", file))
+        videoFiles.forEach((file) => formData.append("videos", file))
 
         const res = await createReport(formData)
 
@@ -113,6 +129,7 @@ export default function ReportForm({ cities }) {
             setShowSuccessModal(true)
             e.target.reset()
             setImageFiles([])
+                setVideoFiles([])
             setTags([])
             setLocationData(null)
         } else {
@@ -182,7 +199,7 @@ export default function ReportForm({ cities }) {
                         <div className="space-y-1">
                             <Label className={LabelStyle}>Search Area / Landmark <span className="text-red-500">*</span></Label>
                             <div className="relative z-30">
-                                <LocationSearch onLocationSelect={setLocationData} />
+                                <LocationSearch onLocationSelect={setLocationData} cityName={selectedCityName} />
                             </div>
                             
                             <AnimatePresence>
@@ -360,6 +377,50 @@ export default function ReportForm({ cities }) {
                                 )}
                                 <Input name="images" type="file" accept="image/*" multiple className="hidden" id="image-upload" onChange={handleImageChange} />
                                 <label htmlFor="image-upload" className="absolute inset-0 cursor-pointer"></label>
+                            </div>
+                        </div>
+
+                        {/* Video Upload */}
+                        <div className="space-y-2">
+                            <Label className={LabelStyle}>Video Evidence (Optional, Max 2 short clips)</Label>
+                            <div className={`border-2 border-dashed rounded-xl p-8 transition-all cursor-pointer relative group/upload 
+                                ${videoFiles.length > 0 
+                                    ? 'border-green-500/30 bg-green-500/5' 
+                                    : 'border-white/10 hover:border-orange-500/50 hover:bg-slate-900/50'
+                                }`}>
+                                
+                                {videoFiles.length > 0 ? (
+                                    <div className="w-full">
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mb-4">
+                                            {videoFiles.map((file, index) => (
+                                                <div key={index} className="aspect-video bg-slate-950 rounded-lg relative flex flex-col items-center justify-center text-xs border border-white/10 overflow-hidden group/vid">
+                                                    <Video className="h-6 w-6 text-slate-500 mb-2" />
+                                                    <span className="truncate w-full px-2 text-center text-slate-400">{file.name}</span>
+                                                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover/vid:opacity-100 transition-opacity flex items-center justify-center">
+                                                        <button
+                                                            type="button"
+                                                            onClick={(e) => { e.preventDefault(); removeVideo(index) }}
+                                                            className="bg-red-500 text-white rounded-full p-1.5 hover:scale-110 transition-transform"
+                                                        >
+                                                            <X className="h-4 w-4" />
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                        <p className="text-xs text-center text-green-400 font-bold uppercase tracking-wider">{videoFiles.length} videos attached</p>
+                                    </div>
+                                ) : (
+                                    <div className="flex flex-col items-center justify-center py-4">
+                                        <div className="w-16 h-16 rounded-full bg-slate-900 border border-white/10 flex items-center justify-center mb-4 group-hover/upload:border-orange-500/50 group-hover/upload:text-orange-500 transition-colors">
+                                            <UploadCloud className="h-8 w-8 text-slate-400 group-hover/upload:text-orange-500 transition-colors" />
+                                        </div>
+                                        <span className="text-sm font-bold text-white mb-1">Click to upload videos</span>
+                                        <p className="text-xs text-slate-500">MP4, WebM (Recommended &lt; 25MB each)</p>
+                                    </div>
+                                )}
+                                <Input name="videos" type="file" accept="video/*" multiple className="hidden" id="video-upload" onChange={handleVideoChange} />
+                                <label htmlFor="video-upload" className="absolute inset-0 cursor-pointer"></label>
                             </div>
                         </div>
                     </CardContent>

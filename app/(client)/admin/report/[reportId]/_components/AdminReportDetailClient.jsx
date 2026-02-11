@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { MapPin, Clock, Building2, ArrowLeft, Loader2, Image as ImageIcon } from "lucide-react"
+import { MapPin, Clock, Building2, ArrowLeft, Loader2, Image as ImageIcon, Video } from "lucide-react"
 import { formatDistanceToNow, format } from "date-fns"
 import { useRouter } from "next/navigation"
 import { updateReportStatus } from "@/actions/adminDashboardActions"
@@ -19,10 +19,12 @@ export default function AdminReportDetailClient({ report, user, adminProfile }) 
     const [adminNote, setAdminNote] = useState(report.adminNote || "")
 
     // 🔹 FIX: Combine legacy imageUrl and new images array
-    const allImages = report.images || [];
+    const allImages = report.images ? [...report.images] : [];
     if (report.imageUrl && !allImages.find(img => img.url === report.imageUrl)) {
         allImages.unshift({ id: 'legacy', url: report.imageUrl });
     }
+
+    const allVideos = report.videos || []
 
     const statusColors = {
         PENDING: "bg-yellow-500/10 text-yellow-500 border-yellow-500/20",
@@ -82,6 +84,31 @@ export default function AdminReportDetailClient({ report, user, adminProfile }) 
                                             <a href={img.url} target="_blank" rel="noreferrer" className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-sm font-medium">
                                                 View Full Size
                                             </a>
+                                        </div>
+                                    ))}
+                                </div>
+                            </CardContent>
+                        </Card>
+                    )}
+
+                    {/* VIDEO EVIDENCE GALLERY */}
+                    {allVideos.length > 0 && (
+                        <Card className="bg-slate-900/80 backdrop-blur-xl border-white/10">
+                            <CardHeader>
+                                <CardTitle className="text-white flex items-center gap-2">
+                                    <Video className="h-5 w-5 text-orange-400" />
+                                    Video Evidence
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    {allVideos.map((vid, index) => (
+                                        <div key={vid.id || index} className="rounded-lg overflow-hidden border border-white/10 aspect-video bg-black relative">
+                                            <video
+                                                src={vid.url}
+                                                controls
+                                                className="w-full h-full object-cover"
+                                            />
                                         </div>
                                     ))}
                                 </div>

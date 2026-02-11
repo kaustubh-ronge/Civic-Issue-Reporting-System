@@ -126,6 +126,39 @@ export async function createReport(formData) {
             }
         }
 
+        // 7. 🎥 VIDEO TO DATABASE LOGIC (Base64) - limit to 2 short clips
+        const videoFiles = (formData.getAll("videos") || []).slice(0, 2)
+
+        if (videoFiles && videoFiles.length > 0) {
+            for (let i = 0; i < videoFiles.length; i++) {
+                const file = videoFiles[i]
+
+                if (file && file.size > 0) {
+                    // Basic size guard: skip very large uploads (e.g. > 25MB)
+                    const MAX_BYTES = 25 * 1024 * 1024
+                    if (file.size > MAX_BYTES) continue
+
+                    // Convert file to Buffer
+                    const buffer = Buffer.from(await file.arrayBuffer())
+
+                    // Convert Buffer to Base64 String
+                    const base64Data = buffer.toString("base64")
+                    const fileType = file.type || "video/mp4"
+
+                    // Data URI usable directly in <video src="..." />
+                    const base64Url = `data:${fileType};base64,${base64Data}`
+
+                    await db.reportVideo.create({
+                        data: {
+                            reportId: report.id,
+                            url: base64Url,
+                            order: i
+                        }
+                    })
+                }
+            }
+        }
+
         if (sendNotification) {
             await sendNotification(user.id, "Report Submitted", `ID: ${reportId}`, reportId, detectedPriority).catch(() => { })
         }
@@ -153,6 +186,7 @@ export async function getReportByReportId(reportId) {
                 area: true,
                 tags: true,
                 images: { orderBy: { order: 'asc' } },
+                videos: { orderBy: { order: 'asc' } },
                 updates: { orderBy: { createdAt: 'desc' } }
             }
         })
@@ -185,12 +219,14 @@ export async function getUserReports() {
 }
 
 // --- Resolution confirmation and reopen actions ---
-export async function confirmResolution(reportId) {
+export async function confirmResolution(formData) {
     try {
         const user = await checkUser()
         if (!user) return { success: false, error: "You must be logged in." }
 
-        const report = await db.report.findFirst({ where: { OR: [{ id: reportId }, { reportId: reportId }] } })
+        const rawId = formData instanceof FormData ? (formData.get("reportId") || "").toString() : formData
+
+        const report = await db.report.findFirst({ where: { OR: [{ id: rawId }, { reportId: rawId }] } })
         if (!report) return { success: false, error: "Report not found" }
         if (report.authorId !== user.id) return { success: false, error: "Unauthorized" }
         if (report.status !== 'PENDING_VERIFICATION') return { success: false, error: "Report not awaiting verification" }
@@ -221,12 +257,15 @@ export async function confirmResolution(reportId) {
     }
 }
 
-export async function reopenReport(reportId, reason = '') {
+export async function reopenReport(formData) {
     try {
         const user = await checkUser()
         if (!user) return { success: false, error: "You must be logged in." }
 
-        const report = await db.report.findFirst({ where: { OR: [{ id: reportId }, { reportId: reportId }] } })
+        const rawId = formData instanceof FormData ? (formData.get("reportId") || "").toString() : formData
+        const reason = formData instanceof FormData ? (formData.get("reason") || "").toString() : ''
+
+        const report = await db.report.findFirst({ where: { OR: [{ id: rawId }, { reportId: rawId }] } })
         if (!report) return { success: false, error: "Report not found" }
         if (report.authorId !== user.id) return { success: false, error: "Unauthorized" }
         if (report.status !== 'PENDING_VERIFICATION') return { success: false, error: "Report not awaiting verification" }

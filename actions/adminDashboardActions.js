@@ -36,6 +36,9 @@ export async function getAdminReports() {
                 tags: true,
                 images: {
                     orderBy: { order: 'asc' }
+                },
+                videos: {
+                    orderBy: { order: 'asc' }
                 }
             }
         })

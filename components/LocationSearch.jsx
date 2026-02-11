@@ -6,7 +6,7 @@ import { Card } from "@/components/ui/card"
 import { MapPin, Loader2, Search, X } from "lucide-react"
 import { useDebounce } from "@/hooks/use-debounce" 
 
-export default function LocationSearch({ onLocationSelect }) {
+export default function LocationSearch({ onLocationSelect, cityName }) {
     const [query, setQuery] = useState("")
     const [results, setResults] = useState([])
     const [loading, setLoading] = useState(false)
@@ -39,11 +39,26 @@ export default function LocationSearch({ onLocationSelect }) {
             try {
                 // Call OpenStreetMap API (Free, No Key required)
                 // We limit to 5 results to keep UI clean
+                // If a city is provided, bias search to that city/municipal area
+                let query = debouncedQuery
+                if (cityName) {
+                    query = `${debouncedQuery}, ${cityName}`
+                }
+
                 const res = await fetch(
-                    `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(debouncedQuery)}&limit=5`
+                    `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5`
                 )
                 const data = await res.json()
-                setResults(data)
+
+                let filtered = data
+                if (cityName) {
+                    const cityKey = cityName.toLowerCase().split(/[,-]/)[0].trim()
+                    filtered = data.filter(item =>
+                        (item.display_name || "").toLowerCase().includes(cityKey)
+                    )
+                }
+
+                setResults(filtered)
                 setIsOpen(true)
             } catch (error) {
                 console.error("Location search failed", error)

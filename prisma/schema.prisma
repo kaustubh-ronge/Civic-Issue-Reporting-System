@@ -201,6 +201,7 @@ model Report {
   
   // Relations
   images       ReportImage[]
+  videos       ReportVideo[]
   updates      ReportUpdate[]
   verifications Verification[]
   
@@ -215,6 +216,16 @@ model ReportImage {
   reportId  String
   url       String
   isBefore  Boolean  @default(false) // For before/after photos
+  order     Int      @default(0)     // Display order
+  createdAt DateTime @default(now())
+}
+
+// Multiple Videos per Report
+model ReportVideo {
+  id        String   @id @default(cuid())
+  report    Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  reportId  String
+  url       String
   order     Int      @default(0)     // Display order
   createdAt DateTime @default(now())
 }
