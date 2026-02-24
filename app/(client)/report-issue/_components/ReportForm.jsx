@@ -83,8 +83,36 @@ export default function ReportForm({ cities }) {
 
     const handleVideoChange = (e) => {
         if (e.target.files) {
-            const files = Array.from(e.target.files)
-            setVideoFiles(prev => [...prev, ...files].slice(0, 2))
+            let files = Array.from(e.target.files)
+
+            // enforce same limit as server action (25 MB)
+            const MAX_BYTES = 25 * 1024 * 1024
+            const filtered = []
+            const skipped = []
+
+            files.forEach(file => {
+                if (file.size > MAX_BYTES) {
+                    skipped.push(file.name || file.type || "(unknown)")
+                } else {
+                    filtered.push(file)
+                }
+            })
+
+            if (skipped.length) {
+                toast.error(`Skipped ${skipped.length} video(s) over 25MB`)
+            }
+
+            // dedupe against existing selections by name+size
+            setVideoFiles(prev => {
+                const seen = new Set(prev.map(f => `${f.name}|${f.size}`))
+                const unique = filtered.filter(f => {
+                    const key = `${f.name}|${f.size}`
+                    if (seen.has(key)) return false
+                    seen.add(key)
+                    return true
+                })
+                return [...prev, ...unique].slice(0, 2)
+            })
         }
     }
 
@@ -122,6 +150,11 @@ export default function ReportForm({ cities }) {
         imageFiles.forEach((file) => formData.append("images", file))
         videoFiles.forEach((file) => formData.append("videos", file))
 
+        // if user somehow attempted to upload more than allowed, give a warning
+        if (videoFiles.length > 2) {
+            toast.error("You can only upload up to 2 videos. Extra files were ignored.")
+        }
+
         const res = await createReport(formData)
 
         if (res.success) {
@@ -129,9 +162,13 @@ export default function ReportForm({ cities }) {
             setShowSuccessModal(true)
             e.target.reset()
             setImageFiles([])
-                setVideoFiles([])
+            setVideoFiles([])
             setTags([])
             setLocationData(null)
+
+            if (res.warning) {
+                toast.warn(res.warning)
+            }
         } else {
             toast.error(res.error)
         }

@@ -38,7 +38,8 @@ export async function getAdminReports() {
                     orderBy: { order: 'asc' }
                 },
                 videos: {
-                    orderBy: { order: 'asc' }
+                    orderBy: { order: 'asc' },
+                    select: { id: true, order: true }
                 }
             }
         })
@@ -72,7 +73,11 @@ export async function updateReportStatus(reportId, newStatus, adminNote, priorit
         const oldStatus = report.status
         
         // Prepare update data
-        // If admin marks as RESOLVED, move to PENDING_VERIFICATION and set an expiry window
+        // By default we will propagate whatever the admin selected, but
+        // resolving has a special flow – the first time it bumps the ticket
+        // into "PENDING_VERIFICATION" so the reporter can confirm.  If the
+        // report is already awaiting verification and the admin chooses
+        // RESOLVED again, treat that as a hard finalize and move to RESOLVED.
         let targetStatus = newStatus
         const updateData = {
             adminNote: adminNote,
@@ -87,9 +92,17 @@ export async function updateReportStatus(reportId, newStatus, adminNote, priorit
         }
 
         if (newStatus === 'RESOLVED') {
-            targetStatus = 'PENDING_VERIFICATION'
-            updateData.status = targetStatus
-            updateData.pendingVerificationExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days
+            if (oldStatus === 'PENDING_VERIFICATION') {
+                // final confirmation by an admin; clear the pending window
+                targetStatus = 'RESOLVED'
+                updateData.status = 'RESOLVED'
+                updateData.pendingVerificationExpiresAt = null
+            } else {
+                // normal path: ask reporter to confirm
+                targetStatus = 'PENDING_VERIFICATION'
+                updateData.status = targetStatus
+                updateData.pendingVerificationExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days
+            }
         } else {
             updateData.status = targetStatus
         }

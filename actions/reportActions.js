@@ -4,6 +4,50 @@ import { db } from "@/lib/prisma"
 import { checkUser } from "@/lib/checkUser"
 import { revalidatePath } from "next/cache"
 import { sendNotification } from "@/lib/notifications"
+import fs from "fs"
+import path from "path"
+import { randomUUID } from "crypto"
+import Mux from '@mux/mux-node'
+
+// helper: upload a single File object to Mux and return playback/asset ids
+async function uploadFileToMux(file) {
+    const { MUX_TOKEN_ID, MUX_TOKEN_SECRET } = process.env
+    if (!MUX_TOKEN_ID || !MUX_TOKEN_SECRET) {
+        throw new Error("Missing MUX credentials")
+    }
+    const mux = new Mux({
+        accessToken: MUX_TOKEN_ID,
+        secret: MUX_TOKEN_SECRET
+    })
+
+    // create a direct upload; asset will be auto-created with public playback
+    const upload = await mux.uploads.create({
+        new_asset_settings: { playback_policy: 'public' }
+    })
+    const uploadUrl = upload.url
+    const uploadId = upload.id
+
+    // upload the file bytes to the returned URL
+    await fetch(uploadUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': file.type || 'video/mp4' },
+        body: Buffer.from(await file.arrayBuffer())
+    })
+
+    // wait for associated asset to appear; the SDK can list assets by upload_id
+    let asset = null
+    for (let i = 0; i < 20; i++) {
+        const list = await mux.assets.list({ upload_id: uploadId, limit: 1 })
+        if (list.items && list.items.length > 0) {
+            asset = list.items[0]
+            if (asset.status === 'ready' || asset.status === 'errored') break
+        }
+        await new Promise(r => setTimeout(r, 1000))
+    }
+    if (!asset) throw new Error('Mux asset not found for upload ' + uploadId)
+    const playbackId = asset.playback_ids?.[0]?.id
+    return { playbackId, assetId: asset.id }
+}
 
 export async function createReport(formData) {
     try {
@@ -126,38 +170,93 @@ export async function createReport(formData) {
             }
         }
 
-        // 7. 🎥 VIDEO TO DATABASE LOGIC (Base64) - limit to 2 short clips
+        // 7. 🎥 VIDEO : attempt to send to Mux if credentials are available.
+        //   fall back to disk storage for development or missing keys.
         const videoFiles = (formData.getAll("videos") || []).slice(0, 2)
+        const skippedVideos = []
 
         if (videoFiles && videoFiles.length > 0) {
             for (let i = 0; i < videoFiles.length; i++) {
                 const file = videoFiles[i]
 
                 if (file && file.size > 0) {
-                    // Basic size guard: skip very large uploads (e.g. > 25MB)
+                    // guard size
                     const MAX_BYTES = 25 * 1024 * 1024
-                    if (file.size > MAX_BYTES) continue
+                    if (file.size > MAX_BYTES) {
+                        skippedVideos.push(file.name || file.type || `#${i}`)
+                        continue
+                    }
 
-                    // Convert file to Buffer
-                    const buffer = Buffer.from(await file.arrayBuffer())
+                    let playbackId = null
+                    let assetId = null
+                    let storedUrl = null
 
-                    // Convert Buffer to Base64 String
-                    const base64Data = buffer.toString("base64")
-                    const fileType = file.type || "video/mp4"
+                    // try upload to mux
+                    try {
+                        const result = await uploadFileToMux(file)
+                        playbackId = result.playbackId
+                        assetId = result.assetId
+                        if (!playbackId) throw new Error("Mux returned no playback id")
+                    } catch (muxErr) {
+                        console.warn('Mux upload failed, falling back to disk:', muxErr)
+                        // fallback: write to disk same as before
+                        const outDir = path.join(process.cwd(), "public", "report-videos")
+                        await fs.promises.mkdir(outDir, { recursive: true })
+                        const buffer = Buffer.from(await file.arrayBuffer())
+                        let ext = path.extname(file.name) || ''
+                        if (!ext && file.type) {
+                            const mimePart = file.type.split('/')[1]
+                            if (mimePart) ext = `.${mimePart}`
+                        }
+                        if (!ext) ext = ".mp4"
+                        const filename = `${randomUUID()}${ext}`
+                        const savePath = path.join(outDir, filename)
+                        await fs.promises.writeFile(savePath, buffer)
+                        storedUrl = `/report-videos/${filename}`
+                    }
 
-                    // Data URI usable directly in <video src="..." />
-                    const base64Url = `data:${fileType};base64,${base64Data}`
+                    // make sure we don't create duplicates if the same file
+                    // somehow gets processed twice (this was happening in some
+                    // edge cases).  look up by playbackId or url, whichever we
+                    // ended up with.
+                    const whereConditions = [{ reportId: report.id }]
+                    if (playbackId) whereConditions.push({ playbackId })
+                    if (storedUrl) whereConditions.push({ url: storedUrl })
+
+                    const existing = await db.reportVideo.findFirst({
+                        where: { OR: whereConditions }
+                    })
+                    if (existing) {
+                        continue // skip duplicate entry
+                    }
 
                     await db.reportVideo.create({
                         data: {
                             reportId: report.id,
-                            url: base64Url,
-                            order: i
+                            order: i,
+                            ...(storedUrl && { url: storedUrl }),
+                            ...(playbackId && { playbackId }),
+                            ...(assetId && { assetId })
                         }
                     })
                 }
             }
         }
+
+        // if any videos were skipped because they were too big, include a warning
+        let response = { success: true, reportId }
+        if (skippedVideos.length) {
+            response.warning = `Some videos were too large and were not uploaded: ${skippedVideos.join(', ')}`
+        }
+
+        if (sendNotification) {
+            await sendNotification(user.id, "Report Submitted", `ID: ${reportId}`, reportId, detectedPriority).catch(() => { })
+        }
+
+        revalidatePath('/admin')
+        revalidatePath('/status')
+
+        return response
 
         if (sendNotification) {
             await sendNotification(user.id, "Report Submitted", `ID: ${reportId}`, reportId, detectedPriority).catch(() => { })
@@ -186,7 +285,7 @@ export async function getReportByReportId(reportId) {
                 area: true,
                 tags: true,
                 images: { orderBy: { order: 'asc' } },
-                videos: { orderBy: { order: 'asc' } },
+                videos: { orderBy: { order: 'asc' }, select: { id: true, order: true, url: true, playbackId: true, assetId: true } },
                 updates: { orderBy: { createdAt: 'desc' } }
             }
         })
@@ -216,6 +315,22 @@ export async function getUserReports() {
         })
         return { success: true, reports }
     } catch (error) { return { success: false, error: "Fetch failed" } }
+}
+
+// --- Server action: retrieve full video URL for client playback ---
+export async function getVideoUrl(videoId) {
+    if (!videoId) throw new Error("Missing videoId")
+    const vid = await db.reportVideo.findUnique({ where: { id: videoId } })
+    if (!vid) throw new Error("Video not found")
+
+    // if record has a Mux playback ID, construct the streaming url
+    if (vid.playbackId) {
+        // return MP4 variant to satisfy all browsers; `.m3u8` would require HLS support
+        return `https://stream.mux.com/${vid.playbackId}.mp4`
+    }
+
+    // otherwise fall back to stored url or data uri
+    return vid.url || ""
 }
 
 // --- Resolution confirmation and reopen actions ---

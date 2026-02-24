@@ -8,7 +8,7 @@ import { formatDistanceToNow, format } from "date-fns"
 import { useRouter } from "next/navigation"
 import { motion } from "framer-motion"
 import FloatingParticles from "@/components/FloatingParticles" // Assuming you have this
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useEffect } from 'react'
 
 export default function ReportDetailClient({ 
     report, 
@@ -44,12 +44,84 @@ export default function ReportDetailClient({
     }
 
     // Combine legacy image field with new multi-image list for display
-    const allImages = report.images ? [...report.images] : [];
-    if (report.imageUrl && !allImages.find(img => img.url === report.imageUrl)) {
-        allImages.unshift({ id: 'legacy', url: report.imageUrl });
+    let allImages = report.images ? [...report.images] : [];
+    // de-duplicate by URL
+    {
+        const seen = new Set();
+        allImages = allImages.filter(img => {
+            if (seen.has(img.url)) return false;
+            seen.add(img.url);
+            return true;
+        });
+        if (report.imageUrl && !seen.has(report.imageUrl)) {
+            allImages.unshift({ id: 'legacy', url: report.imageUrl });
+        }
     }
 
-    const allVideos = report.videos || []
+    // dedupe videos by URL or playbackId (ignore unique id) to avoid
+    // showing the same clip twice when two records exist for it.
+    let allVideos = report.videos ? [...report.videos] : [];
+    {
+        const seen = new Set();
+        allVideos = allVideos.filter(v => {
+            let key = v.playbackId || v.url || '';
+            if (!key) {
+                // if neither exists, fall back to id so we don't lose data
+                key = v.id;
+            }
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        });
+    }
+
+    // helper component to load a single video URL using server action
+    function VideoLoader({ video }) {
+        const [src, setSrc] = useState(null)
+        const [error, setError] = useState(false)
+        useEffect(() => {
+            let cancelled = false
+            import("@/actions/reportActions").then(({ getVideoUrl }) => {
+                if (!video.id) return
+                getVideoUrl(video.id)
+                    .then(url => {
+                        if (!cancelled) {
+                            if (!url) setError(true)
+                            setSrc(url)
+                        }
+                    })
+                    .catch(err => {
+                        console.error('getVideoUrl failed', video.id, err)
+                        if (!cancelled) setError(true)
+                    })
+            })
+            return () => { cancelled = true }
+        }, [video.id])
+
+        if (src === null && !error) {
+            return <div className="aspect-video bg-black flex items-center justify-center text-slate-500">Loading video…</div>
+        }
+        if (!src) {
+            return <div className="aspect-video bg-black flex items-center justify-center text-slate-500">Video unavailable</div>
+        }
+
+        return (
+            <video
+                src={src}
+                controls
+                preload="metadata"
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                    console.error('Video load error', e, 'src', src)
+                    if (e.target && e.target.error) {
+                        console.error('MediaError code', e.target.error.code, e.target.error.message)
+                    }
+                }}
+            >
+                Your browser does not support video playback.
+            </video>
+        )
+    }
 
     // Status Configuration
     const statusConfig = {
@@ -223,7 +295,7 @@ export default function ReportDetailClient({
                         )}
 
                         {/* Video Gallery */}
-                        {allVideos.length > 0 && (
+                        {allVideos.length > 0 ? (
                             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
                                 <Card className="bg-slate-900/60 backdrop-blur-xl border-white/10 overflow-hidden">
                                     <CardHeader className="border-b border-white/5 pb-4">
@@ -235,14 +307,18 @@ export default function ReportDetailClient({
                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                             {allVideos.map((vid, index) => (
                                                 <div key={vid.id || index} className="group relative aspect-video rounded-xl overflow-hidden border border-white/10 bg-slate-950">
-                                                    <video
-                                                        src={vid.url}
-                                                        controls
-                                                        className="w-full h-full object-cover"
-                                                    />
+                                                    <VideoLoader video={vid} />
                                                 </div>
                                             ))}
                                         </div>
+                                    </CardContent>
+                                </Card>
+                            </motion.div>
+                        ) : (
+                            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
+                                <Card className="bg-slate-900/60 backdrop-blur-xl border-white/10">
+                                    <CardContent className="p-6 text-center text-slate-500">
+                                        No video evidence attached for this report.
                                     </CardContent>
                                 </Card>
                             </motion.div>
@@ -311,21 +387,29 @@ export default function ReportDetailClient({
                                     </div>
 
                                     {/* Map */}
-                                    {report.latitude && report.longitude && (
-                                        <div className="rounded-xl overflow-hidden border border-white/10 mt-4 relative group">
-                                            <iframe
-                                                width="100%" height="200" frameBorder="0"
-                                                style={{ border: 0, filter: "invert(90%) hue-rotate(180deg)" }}
-                                                src={`https://www.openstreetmap.org/export/embed.html?bbox=${report.longitude - 0.005},${report.latitude - 0.005},${report.longitude + 0.005},${report.latitude + 0.005}&layer=mapnik&marker=${report.latitude},${report.longitude}`}
-                                                allowFullScreen
-                                            />
-                                            <a href={`http://maps.google.com/maps?q=${report.latitude},${report.longitude}`} target="_blank" rel="noreferrer" className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <Button size="sm" variant="secondary" className="gap-2">
-                                                    <MapPin className="h-3 w-3" /> Open in Google Maps
-                                                </Button>
-                                            </a>
-                                        </div>
-                                    )}
+                                    {(() => {
+                                        const lat = parseFloat(report.latitude)
+                                        const lon = parseFloat(report.longitude)
+                                        const valid = Number.isFinite(lat) && Number.isFinite(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180
+                                        if (!valid) return null
+                                        // use small delta and ensure not zero
+                                        const delta = 0.002
+                                        return (
+                                            <div className="rounded-xl overflow-hidden border border-white/10 mt-4 relative group">
+                                                <iframe
+                                                    width="100%" height="200" frameBorder="0"
+                                                    style={{ border: 0, filter: "invert(90%) hue-rotate(180deg)" }}
+                                                    src={`https://www.openstreetmap.org/export/embed.html?bbox=${lon - delta},${lat - delta},${lon + delta},${lat + delta}&layer=mapnik&marker=${lat},${lon}`}
+                                                    allowFullScreen
+                                                />
+                                                <a href={`http://maps.google.com/maps?q=${lat},${lon}`} target="_blank" rel="noreferrer" className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <Button size="sm" variant="secondary" className="gap-2">
+                                                        <MapPin className="h-3 w-3" /> Open in Google Maps
+                                                    </Button>
+                                                </a>
+                                            </div>
+                                        )
+                                    })()}
                                 </CardContent>
                             </Card>
                         </motion.div>

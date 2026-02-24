@@ -222,12 +222,14 @@ model ReportImage {
 
 // Multiple Videos per Report
 model ReportVideo {
-  id        String   @id @default(cuid())
-  report    Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
-  reportId  String
-  url       String
-  order     Int      @default(0)     // Display order
-  createdAt DateTime @default(now())
+  id          String   @id @default(cuid())
+  report      Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  reportId    String
+  url         String?               // legacy / external URLs
+  playbackId  String?               // Mux playback ID (stream.mux.com/...)
+  assetId     String?               // optional Mux asset ID for reference
+  order       Int      @default(0)   // Display order
+  createdAt   DateTime @default(now())
 }
 
 // --- DELETED: model Category {} ---
