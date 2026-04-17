@@ -1261,7 +1261,7 @@ export default function ReportForm({ cities }) {
                     <Button 
                         type="submit" 
                         size="lg" 
-                        className="w-full bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white text-lg h-16 font-bold tracking-wide shadow-lg shadow-orange-900/20 transition-all hover:scale-[1.01] rounded-xl"
+                        className="w-full bg-linear-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white text-lg h-16 font-bold tracking-wide shadow-lg shadow-orange-900/20 transition-all hover:scale-[1.01] rounded-xl"
                         disabled={loading || !locationData || !selectedDept}
                     >
                         {loading ? (
@@ -1313,7 +1313,7 @@ export default function ReportForm({ cities }) {
                         <Button variant="outline" onClick={() => setShowSuccessModal(false)} className="w-full sm:w-auto border-white/10 text-slate-300 h-12">
                             Close
                         </Button>
-                        <Button onClick={() => router.push(`/status?track=${submittedReportId}`)} className="w-full sm:w-auto bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white h-12">
+                        <Button onClick={() => router.push(`/status?track=${submittedReportId}`)} className="w-full sm:w-auto bg-linear-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white h-12">
                             <ExternalLink className="h-4 w-4 mr-2" />
                             Track Status
                         </Button>
