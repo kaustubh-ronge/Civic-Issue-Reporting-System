@@ -6,12 +6,12 @@ import { db } from "@/lib/prisma"
 import { checkUser } from "@/lib/checkUser"
 import { revalidatePath } from "next/cache"
 import { sendNotification } from "@/lib/notifications"
+import { analyzeWeatherAndRisk } from "@/lib/environmentalIntelligence"
 import fs from "fs"
 import path from "path"
 import { randomUUID } from "crypto"
 import Mux from '@mux/mux-node'
 
-// helper: upload a single File object to Mux and return playback/asset ids
 async function uploadFileToMux(file) {
     const { MUX_TOKEN_ID, MUX_TOKEN_SECRET } = process.env
     if (!MUX_TOKEN_ID || !MUX_TOKEN_SECRET) {
@@ -22,21 +22,18 @@ async function uploadFileToMux(file) {
         secret: MUX_TOKEN_SECRET
     })
 
-    // create a direct upload; asset will be auto-created with public playback
     const upload = await mux.uploads.create({
         new_asset_settings: { playback_policy: 'public' }
     })
     const uploadUrl = upload.url
     const uploadId = upload.id
 
-    // upload the file bytes to the returned URL
     await fetch(uploadUrl, {
         method: 'PUT',
         headers: { 'Content-Type': file.type || 'video/mp4' },
         body: Buffer.from(await file.arrayBuffer())
     })
 
-    // wait for associated asset to appear; the SDK can list assets by upload_id
     let asset = null
     for (let i = 0; i < 20; i++) {
         const list = await mux.assets.list({ upload_id: uploadId, limit: 1 })
@@ -51,36 +48,30 @@ async function uploadFileToMux(file) {
     return { playbackId, assetId: asset.id }
 }
 
-// ----------------------------------------------------------------------------
-// ORIGINAL WEB SUBMISSION LOGIC (UNTOUCHED)
-// ----------------------------------------------------------------------------
 export async function createReport(formData) {
     try {
         const user = await checkUser()
         if (!user) return { success: false, error: "You must be logged in." }
 
-        // Check ban
         const dbUser = await db.user.findUnique({ where: { id: user.id }, select: { isBanned: true } })
         if (dbUser?.isBanned) return { success: false, error: "Account banned." }
 
-        // 1. Basic Fields & Validation
         const title = (formData.get("title") || "").toString().trim()
         const description = (formData.get("description") || "").toString().trim()
         const cityId = formData.get("cityId")
         const departmentId = formData.get("departmentId")
         const address = formData.get("address")
+        
+        const aiImageBase64 = formData.get("aiImage")
 
-        // Validate required inputs early
         if (!title || title.length < 5) return { success: false, error: "Title is required (min 5 characters)." }
         if (!description || description.length < 10) return { success: false, error: "Description is required (min 10 characters)." }
         if (!cityId || !departmentId) return { success: false, error: "City and Department are required." }
 
-        // 2. Category Logic
         const selectedCategory = formData.get("category")
         const customCategory = formData.get("customCategory")
         let finalCategory = selectedCategory === "Other" && customCategory ? customCategory.toString().trim() : selectedCategory
 
-        // 3. Priority & Location
         const priority = formData.get("priority") === "AUTO" ? null : formData.get("priority")
         let lat = parseFloat(formData.get("lat"))
         let lng = parseFloat(formData.get("lng"))
@@ -91,7 +82,6 @@ export async function createReport(formData) {
         const reportId = `RPT-${Math.floor(1000 + Math.random() * 9000)}`
         const shareToken = `share_${Math.random().toString(36).substring(2, 15)}`
 
-        // 4. Area Logic
         let area = null
         if (address) {
             try {
@@ -100,10 +90,8 @@ export async function createReport(formData) {
             } catch (e) { }
         }
 
-        // Tags (limit to 10 sanitized tags)
         const tags = (formData.getAll("tags") || []).map(t => t.toString().trim()).filter(Boolean).slice(0, 10)
 
-        // 5. Create Report Record
         const report = await db.report.create({
             data: {
                 reportId,
@@ -115,12 +103,14 @@ export async function createReport(formData) {
                 latitude: lat,
                 longitude: lng,
                 shareToken,
+                
+                aiImageUrl: aiImageBase64 ? aiImageBase64.toString() : null,
+                
                 author: { connect: { id: user.id } },
                 city: { connect: { id: cityId } },
                 department: { connect: { id: departmentId } },
                 ...(area && { area: { connect: { id: area.id } } }),
 
-                // Tags
                 ...(tags.length > 0 && {
                     tags: {
                         connectOrCreate: tags.map(tag => ({
@@ -136,7 +126,6 @@ export async function createReport(formData) {
             }
         })
 
-        // 6. 🟢 IMAGE TO DATABASE LOGIC (Base64) - limit to 5 images
         const imageFiles = (formData.getAll("images") || []).slice(0, 5)
 
         if (imageFiles && imageFiles.length > 0) {
@@ -157,7 +146,6 @@ export async function createReport(formData) {
                         }
                     })
 
-                    // Backward compatibility for single image field
                     if (i === 0) {
                         await db.report.update({
                             where: { id: report.id },
@@ -168,7 +156,6 @@ export async function createReport(formData) {
             }
         }
 
-        // 7. 🎥 VIDEO : attempt to send to Mux if credentials are available.
         const videoFiles = (formData.getAll("videos") || []).slice(0, 2)
         const skippedVideos = []
 
@@ -240,6 +227,9 @@ export async function createReport(formData) {
             await sendNotification(user.id, "Report Submitted", `ID: ${reportId}`, reportId, detectedPriority).catch(() => { })
         }
 
+        // TRIGGER AI WEATHER ASSESSMENT
+        analyzeWeatherAndRisk(report.id).catch(console.error);
+
         revalidatePath('/admin')
         revalidatePath('/status')
 
@@ -268,7 +258,6 @@ export async function getReportByReportId(reportId) {
         })
         if (!report) return { success: false, error: "Not found" }
 
-        // Auto-close if pending verification expired
         if (report.status === 'PENDING_VERIFICATION' && report.pendingVerificationExpiresAt && new Date(report.pendingVerificationExpiresAt) < new Date()) {
             const updated = await db.report.update({
                 where: { id: report.id },
@@ -399,9 +388,6 @@ export async function autoCloseExpiredVerifications() {
     }
 }
 
-// ----------------------------------------------------------------------------
-// DEDICATED MOBILE SUBMISSION LOGIC (Fixed Area & URL Null Issues)
-// ----------------------------------------------------------------------------
 export async function createMobileReport(formData) {
     try {
         const user = await checkUser();
@@ -410,7 +396,6 @@ export async function createMobileReport(formData) {
         const dbUser = await db.user.findUnique({ where: { id: user.id }, select: { isBanned: true } });
         if (dbUser?.isBanned) return { success: false, error: "Account banned." };
 
-        // Extract Data
         const title = (formData.get("title") || "").toString().trim();
         const description = (formData.get("description") || "").toString().trim();
         const cityId = formData.get("cityId");
@@ -422,12 +407,13 @@ export async function createMobileReport(formData) {
         const customCategory = formData.get("customCategory");
         const finalCategory = category === "Other" && customCategory ? customCategory.toString().trim() : category;
         const priority = formData.get("priority") || "MEDIUM";
+        
+        const aiImageBase64 = formData.get("aiImage");
 
         const reportId = `RPT-${Math.floor(1000 + Math.random() * 9000)}`;
         const shareToken = `share_${Math.random().toString(36).substring(2, 15)}`;
         const tags = formData.getAll("tags").filter(Boolean);
 
-        // --- FIXED AREA LOGIC ---
         let area = null;
         if (address) {
             try {
@@ -440,7 +426,6 @@ export async function createMobileReport(formData) {
             }
         }
 
-        // --- THE MUX FAST-FETCH FIX ---
         const muxVideoIds = formData.getAll("muxVideoIds");
         const mobileVideoData = [];
 
@@ -458,7 +443,6 @@ export async function createMobileReport(formData) {
 
             try {
                 for (let j = 0; j < 15; j++) {
-                    // Safely query the Mux API (handles both v7 and v8 wrapper structures)
                     const listResponse = await mux.video.assets.list({ upload_id: uploadId, limit: 1 });
                     const assetsArray = listResponse.data || listResponse.items || listResponse;
 
@@ -466,7 +450,6 @@ export async function createMobileReport(formData) {
                         const asset = assetsArray[0];
                         finalAssetId = asset.id;
                         
-                        // Grab playback_id instantly if it exists
                         if (asset.playback_ids && asset.playback_ids.length > 0) {
                             finalPlaybackId = asset.playback_ids[0].id;
                             finalUrl = `https://stream.mux.com/${finalPlaybackId}.mp4`;
@@ -479,7 +462,6 @@ export async function createMobileReport(formData) {
                 console.error("Mux polling error:", err);
             }
 
-            // GUARANTEE the row is added
             mobileVideoData.push({
                 playbackId: finalPlaybackId,
                 assetId: finalAssetId,
@@ -488,7 +470,6 @@ export async function createMobileReport(formData) {
             });
         }
 
-        // 2. Create Report & Connect Everything
         const report = await db.report.create({
             data: {
                 reportId,
@@ -500,11 +481,13 @@ export async function createMobileReport(formData) {
                 latitude: Number.isFinite(lat) ? lat : null,
                 longitude: Number.isFinite(lng) ? lng : null,
                 shareToken,
+                
+                aiImageUrl: aiImageBase64 ? aiImageBase64.toString() : null,
+
                 author: { connect: { id: user.id } },
                 city: { connect: { id: cityId } },
                 department: { connect: { id: departmentId } },
                 
-                // FIXED: Actually connect the resolved area
                 ...(area && { area: { connect: { id: area.id } } }),
 
                 videos: {
@@ -524,7 +507,6 @@ export async function createMobileReport(formData) {
             }
         });
 
-        // 3. Process Images to Base64
         const images = formData.getAll("images");
         for (let i = 0; i < images.length; i++) {
             const file = images[i];
@@ -544,6 +526,9 @@ export async function createMobileReport(formData) {
         if (sendNotification) {
             await sendNotification(user.id, "Report Submitted", `ID: ${reportId}`, reportId, priority).catch(() => {});
         }
+
+        // TRIGGER AI WEATHER ASSESSMENT
+        analyzeWeatherAndRisk(report.id).catch(console.error);
 
         revalidatePath('/status');
         revalidatePath('/admin');

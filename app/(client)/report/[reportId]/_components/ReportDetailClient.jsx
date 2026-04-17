@@ -1,13 +1,15 @@
+
+
 'use client'
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { MapPin, Clock, Building2, CheckCircle2, AlertCircle, XCircle, Loader2, ArrowLeft, Image as ImageIcon, Share2, Video } from "lucide-react"
+import { MapPin, Clock, Building2, CheckCircle2, AlertCircle, XCircle, Loader2, ArrowLeft, Image as ImageIcon, Share2, Video, Sparkles, ShieldAlert, DownloadCloud } from "lucide-react"
 import { formatDistanceToNow, format } from "date-fns"
 import { useRouter } from "next/navigation"
 import { motion } from "framer-motion"
-import FloatingParticles from "@/components/FloatingParticles" // Assuming you have this
+import FloatingParticles from "@/components/FloatingParticles" 
 import { useState, useTransition, useEffect } from 'react'
 
 export default function ReportDetailClient({ 
@@ -25,7 +27,37 @@ export default function ReportDetailClient({
     const [reopenReason, setReopenReason] = useState('')
     const [showReopen, setShowReopen] = useState(false)
 
-    // --- LOGIC: Handle Verify Button Click ---
+    const handleDownloadPDF = async () => {
+        if (!report.reportId) return;
+        try {
+            const response = await fetch(`/api/reports/${report.reportId}/pdf?ts=${Date.now()}`, {
+                method: "GET",
+                cache: "no-store"
+            });
+
+            if (!response.ok) {
+                throw new Error("Failed to download report PDF");
+            }
+
+            const receivedReportId = response.headers.get("x-report-id");
+            if (receivedReportId && receivedReportId !== report.reportId) {
+                throw new Error(`Report mismatch detected. Expected ${report.reportId}, got ${receivedReportId}`);
+            }
+
+            const blob = await response.blob();
+            const objectUrl = URL.createObjectURL(blob);
+            const downloadLink = document.createElement("a");
+            downloadLink.href = objectUrl;
+            downloadLink.download = `CivicAudit_${report.reportId}.pdf`;
+            downloadLink.rel = "noopener";
+            downloadLink.click();
+            URL.revokeObjectURL(objectUrl);
+        } catch (error) {
+            console.error("PDF download failed:", error);
+            alert("Unable to download the correct PDF right now. Please try again.");
+        }
+    };
+
     const handleVerify = () => {
         if (!confirm('Are you sure you want to verify this report?')) return;
 
@@ -33,7 +65,7 @@ export default function ReportDetailClient({
             try {
                 const result = await verifyAction(report.id)
                 if (result.success) {
-                    router.refresh() // Refresh page data to show "Verified" status
+                    router.refresh()
                 } else {
                     alert(result.error || "Verification failed")
                 }
@@ -43,9 +75,7 @@ export default function ReportDetailClient({
         })
     }
 
-    // Combine legacy image field with new multi-image list for display
     let allImages = report.images ? [...report.images] : [];
-    // de-duplicate by URL
     {
         const seen = new Set();
         allImages = allImages.filter(img => {
@@ -58,15 +88,12 @@ export default function ReportDetailClient({
         }
     }
 
-    // dedupe videos by URL or playbackId (ignore unique id) to avoid
-    // showing the same clip twice when two records exist for it.
     let allVideos = report.videos ? [...report.videos] : [];
     {
         const seen = new Set();
         allVideos = allVideos.filter(v => {
             let key = v.playbackId || v.url || '';
             if (!key) {
-                // if neither exists, fall back to id so we don't lose data
                 key = v.id;
             }
             if (seen.has(key)) return false;
@@ -75,7 +102,6 @@ export default function ReportDetailClient({
         });
     }
 
-    // helper component to load a single video URL using server action
     function VideoLoader({ video }) {
         const [src, setSrc] = useState(null)
         const [error, setError] = useState(false)
@@ -123,7 +149,6 @@ export default function ReportDetailClient({
         )
     }
 
-    // Status Configuration
     const statusConfig = {
         PENDING: { color: "text-yellow-400", bg: "bg-yellow-500/10", border: "border-yellow-500/20", icon: AlertCircle, label: "Pending Review" },
         IN_PROGRESS: { color: "text-blue-400", bg: "bg-blue-500/10", border: "border-blue-500/20", icon: Loader2, label: "In Progress" },
@@ -138,7 +163,6 @@ export default function ReportDetailClient({
     return (
         <div className="min-h-screen bg-slate-950 pt-28 pb-12 relative overflow-hidden">
             
-            {/* --- BACKGROUND EFFECTS --- */}
             <div className="fixed inset-0 z-0 pointer-events-none">
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,var(--tw-gradient-stops))] from-slate-900 via-slate-950 to-black"></div>
                 <div className="absolute top-0 right-0 w-125 h-125 bg-blue-500/5 rounded-full blur-[120px]"></div>
@@ -149,7 +173,6 @@ export default function ReportDetailClient({
 
             <div className="container mx-auto px-6 md:px-12 relative z-10 max-w-6xl">
                 
-                {/* --- NAVIGATION & ACTION BAR --- */}
                 <div className="flex items-center justify-between mb-8">
                     <Button
                         variant="ghost"
@@ -164,7 +187,6 @@ export default function ReportDetailClient({
                             <Share2 className="h-4 w-4 mr-2" /> Share
                         </Button>
 
-                        {/* --- VERIFY BUTTON LOGIC --- */}
                         {!report.isVerified ? (
                             <Button 
                                 size="sm" 
@@ -186,10 +208,19 @@ export default function ReportDetailClient({
                                 <Button variant="ghost" size="sm" className="ml-2">Download Receipt</Button>
                             </a>
                         )}
+                        {report.pdfReportBase64 && (
+                            <Button
+                                onClick={handleDownloadPDF}
+                                variant="outline"
+                                size="sm"
+                                className="border-blue-500/30 text-blue-400 hover:bg-blue-500/10 hover:text-blue-300"
+                            >
+                                <DownloadCloud className="h-4 w-4 mr-2" /> Download Detailed PDF
+                            </Button>
+                        )}
                     </div>
                 </div>
 
-                {/* --- HEADER --- */}
                 <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                         <div className="space-y-2">
@@ -227,7 +258,6 @@ export default function ReportDetailClient({
                     </div>
                 </motion.div>
 
-                {/* --- CONFIRMATION CARD (For Authors) --- */}
                 {report.status === 'PENDING_VERIFICATION' && isAuthor && (
                     <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
                         <Card className="bg-amber-900/10 border border-amber-500/10">
@@ -237,7 +267,6 @@ export default function ReportDetailClient({
                             <CardContent>
                                 <p className="text-slate-300 mb-4">An official has marked this report as resolved. Please confirm whether the issue is fixed.</p>
                                 <div className="flex items-center gap-3">
-                                    {/* Using form action for simple server triggers if preferred, or convert to onClick like verify */}
                                     <form action={confirmAction}>
                                         <input type="hidden" name="reportId" value={report.id || report.reportId} />
                                         <Button size="sm" type="submit" className="bg-green-600 text-white">Yes, it's fixed</Button>
@@ -264,12 +293,52 @@ export default function ReportDetailClient({
                     </motion.div>
                 )}
 
-                {/* --- MAIN GRID --- */}
                 <div className="grid lg:grid-cols-3 gap-8">
                     
                     {/* LEFT COLUMN */}
                     <div className="lg:col-span-2 space-y-8">
-                        {/* Image Gallery */}
+                        
+                        {/* YOLO AI PROOF IMAGE */}
+                        {report.aiImageUrl && (
+                            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
+                                <Card className="bg-orange-900/10 backdrop-blur-xl border-orange-500/20 overflow-hidden">
+                                    <CardHeader className="border-b border-orange-500/10 pb-4">
+                                        <CardTitle className="text-orange-400 flex items-center gap-2 text-lg">
+                                            <Sparkles className="h-5 w-5" /> AI Verified Blueprint
+                                        </CardTitle>
+                                    </CardHeader>
+                                    <CardContent className="p-6">
+                                        <div className="group relative aspect-video rounded-xl overflow-hidden border border-white/10 bg-slate-950">
+                                            <img src={report.aiImageUrl} alt="AI Proof" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
+                                            <a href={report.aiImageUrl} target="_blank" rel="noreferrer" className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center text-white text-sm font-medium backdrop-blur-[2px]">
+                                                View Full Size
+                                            </a>
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            </motion.div>
+                        )}
+
+                        {/* --- ENVIRONMENTAL RISK AUDIT --- */}
+                        {report.aiRiskAnalysis && (
+                            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }}>
+                                <Card className="bg-blue-950/20 backdrop-blur-xl border-blue-500/30 shadow-[0_0_20px_rgba(59,130,246,0.1)]">
+                                    <CardHeader className="border-b border-blue-500/10 pb-4 flex flex-row items-center justify-between">
+                                        <CardTitle className="text-blue-400 flex items-center gap-2 text-lg">
+                                            <ShieldAlert className="h-5 w-5" /> Environmental Risk Audit
+                                        </CardTitle>
+                                    </CardHeader>
+                                    <CardContent className="p-6">
+                                        <div className="prose prose-invert prose-sm max-w-none text-slate-300">
+                                            <p className="mb-4 font-semibold text-blue-300">Automated Intelligence Strategy:</p>
+                                            <p className="leading-relaxed">{report.aiRiskAnalysis}</p>
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            </motion.div>
+                        )}
+                        {/* -------------------------------------- */}
+
                         {allImages.length > 0 && (
                             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
                                 <Card className="bg-slate-900/60 backdrop-blur-xl border-white/10 overflow-hidden">
@@ -294,7 +363,6 @@ export default function ReportDetailClient({
                             </motion.div>
                         )}
 
-                        {/* Video Gallery */}
                         {allVideos.length > 0 ? (
                             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
                                 <Card className="bg-slate-900/60 backdrop-blur-xl border-white/10 overflow-hidden">
@@ -324,7 +392,6 @@ export default function ReportDetailClient({
                             </motion.div>
                         )}
 
-                        {/* Description */}
                         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
                             <Card className="bg-slate-900/60 backdrop-blur-xl border-white/10">
                                 <CardHeader className="border-b border-white/5 pb-4">
@@ -335,29 +402,8 @@ export default function ReportDetailClient({
                                 </CardContent>
                             </Card>
                         </motion.div>
-
-                        {/* Official Response */}
-                        {report.adminNote && (
-                            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
-                                <Card className="bg-linear-to-br from-blue-900/20 to-slate-900/40 border border-blue-500/20 overflow-hidden relative">
-                                    <div className="absolute top-0 left-0 w-1 h-full bg-blue-500"></div>
-                                    <CardHeader className="pb-2">
-                                        <CardTitle className="text-blue-400 flex items-center gap-2 text-lg">
-                                            <Building2 className="h-5 w-5" /> Official Response
-                                        </CardTitle>
-                                    </CardHeader>
-                                    <CardContent className="p-6 pt-2">
-                                        <p className="text-slate-200 leading-relaxed bg-slate-950/30 p-4 rounded-lg border border-white/5">{report.adminNote}</p>
-                                        <p className="text-xs text-slate-500 mt-3 flex items-center gap-1">
-                                            <Clock className="h-3 w-3" /> Update received {formatDistanceToNow(new Date(report.updatedAt))} ago
-                                        </p>
-                                    </CardContent>
-                                </Card>
-                            </motion.div>
-                        )}
                     </div>
 
-                    {/* RIGHT COLUMN */}
                     <div className="space-y-6">
                         <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.4 }}>
                             <Card className="bg-slate-900/60 backdrop-blur-xl border-white/10 sticky top-24">
@@ -386,13 +432,11 @@ export default function ReportDetailClient({
                                         </div>
                                     </div>
 
-                                    {/* Map */}
                                     {(() => {
                                         const lat = parseFloat(report.latitude)
                                         const lon = parseFloat(report.longitude)
                                         const valid = Number.isFinite(lat) && Number.isFinite(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180
                                         if (!valid) return null
-                                        // use small delta and ensure not zero
                                         const delta = 0.002
                                         return (
                                             <div className="rounded-xl overflow-hidden border border-white/10 mt-4 relative group">

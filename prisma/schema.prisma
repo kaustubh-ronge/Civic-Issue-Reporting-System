@@ -1,4 +1,456 @@
-// prisma/schema.prisma
+// // generator client {
+// //   provider = "prisma-client-js"
+// // }
+
+// // datasource db {
+// //   provider = "postgresql"
+// //   url      = env("DATABASE_URL")
+// // }
+
+// // enum Role {
+// //   USER
+// //   ADMIN
+// //   SUPER_ADMIN
+// // }
+
+// // enum ReportStatus {
+// //   PENDING
+// //   IN_PROGRESS
+// //   PENDING_VERIFICATION
+// //   RESOLVED
+// //   REJECTED
+// // }
+
+// // enum Priority {
+// //   LOW
+// //   MEDIUM
+// //   HIGH
+// //   CRITICAL
+// // }
+
+// // enum NotificationType {
+// //   EMAIL
+// //   SMS
+// //   IN_APP
+// // }
+
+// // model User {
+// //   id                String         @id @default(cuid())
+// //   clerkId           String         @unique
+// //   email             String         @unique
+// //   role              Role           @default(USER)
+// //   firstName         String?
+// //   lastName          String?
+// //   phone             String?
+// //   strikeCount       Int            @default(0)
+// //   isBanned          Boolean        @default(false)
+// //   reputationPoints  Int            @default(0)
+// //   verifiedReports   Int            @default(0)
+// //   trustScore        Float          @default(0.0)
+// //   emailNotifications Boolean       @default(true)
+// //   smsNotifications   Boolean       @default(false)
+// //   reports           Report[]
+// //   adminProfile      AdminProfile?
+// //   verifications     Verification[]
+// //   notifications     Notification[]
+// //   createdAt         DateTime       @default(now())
+// //   updatedAt         DateTime       @updatedAt
+// // }
+
+// // model AdminProfile {
+// //   id            String     @id @default(cuid())
+// //   user          User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+// //   userId        String     @unique
+// //   department    Department @relation(fields: [departmentId], references: [id])
+// //   departmentId  String
+// //   designation   String?
+// //   employeeId    String?
+// //   phone         String?
+// //   isVerified    Boolean    @default(false)
+// // }
+
+// // model State {
+// //   id     String @id @default(cuid())
+// //   name   String @unique
+// //   cities City[]
+// // }
+
+// // model City {
+// //   id          String       @id @default(cuid())
+// //   name        String
+// //   state       State        @relation(fields: [stateId], references: [id])
+// //   stateId     String
+// //   areas       Area[]
+// //   departments Department[]
+// //   reports     Report[]
+// //   @@unique([name, stateId])
+// // }
+
+// // model Area {
+// //   id      String   @id @default(cuid())
+// //   name    String
+// //   city    City     @relation(fields: [cityId], references: [id], onDelete: Cascade)
+// //   cityId  String
+// //   reports Report[]
+// //   @@unique([name, cityId])
+// // }
+
+// // model Department {
+// //   id        String           @id @default(cuid())
+// //   name      String
+// //   city      City             @relation(fields: [cityId], references: [id], onDelete: Cascade)
+// //   cityId    String
+// //   admins    AdminProfile[]
+// //   reports   Report[]
+// //   templates ReportTemplate[]
+// //   @@unique([name, cityId])
+// // }
+
+// // model Report {
+// //   id                           String         @id @default(cuid())
+// //   reportId                     String         @unique
+// //   author                       User           @relation(fields: [authorId], references: [id])
+// //   authorId                     String
+// //   city                         City           @relation(fields: [cityId], references: [id])
+// //   cityId                       String
+// //   area                         Area?          @relation(fields: [areaId], references: [id])
+// //   areaId                       String?
+// //   department                   Department     @relation(fields: [departmentId], references: [id])
+// //   departmentId                 String
+// //   title                        String
+// //   description                  String
+// //   imageUrl                     String?
+// //   aiImageUrl                   String?
+  
+// //   // --- NEW: WEATHER & AUTOMATION FIELDS ---
+// //   weatherForecast              String?        // Holds the 7-day raw data
+// //   aiRiskAnalysis               String?        // Detailed text from the LLM
+// //   pdfReportBase64              String?        // The actual PDF file stored as Base64 text
+// //   lastWeatherScan              DateTime?      // Timestamp for the 4-day loop
+// //   // ----------------------------------------
+
+// //   status                       ReportStatus   @default(PENDING)
+// //   priority                     Priority       @default(MEDIUM)
+// //   category                     String?
+// //   latitude                     Float?
+// //   longitude                    Float?
+// //   adminNote                    String?
+// //   estimatedCost                Float?
+// //   actualCost                   Float?
+// //   isVerified                   Boolean        @default(false)
+// //   verificationCount            Int            @default(0)
+// //   pendingVerificationExpiresAt DateTime?
+// //   shareToken                   String?        @unique
+// //   isPublic                     Boolean        @default(false)
+// //   images                       ReportImage[]
+// //   videos                       ReportVideo[]
+// //   updates                      ReportUpdate[]
+// //   verifications                Verification[]
+// //   createdAt                    DateTime       @default(now())
+// //   updatedAt                    DateTime       @updatedAt
+// // }
+
+// // model ReportImage {
+// //   id        String   @id @default(cuid())
+// //   report    Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
+// //   reportId  String
+// //   url       String
+// //   isBefore  Boolean  @default(false)
+// //   order     Int      @default(0)
+// //   createdAt DateTime @default(now())
+// // }
+
+// // model ReportVideo {
+// //   id         String   @id @default(cuid())
+// //   report     Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
+// //   reportId   String
+// //   url        String?
+// //   playbackId String?
+// //   assetId    String?
+// //   order      Int      @default(0)
+// //   createdAt  DateTime @default(now())
+// // }
+
+// // model Tag {
+// //   id        String   @id @default(cuid())
+// //   name      String   @unique
+// //   createdAt DateTime @default(now())
+// // }
+
+// // model ReportUpdate {
+// //   id        String       @id @default(cuid())
+// //   report    Report       @relation(fields: [reportId], references: [id], onDelete: Cascade)
+// //   reportId  String
+// //   oldStatus ReportStatus?
+// //   newStatus ReportStatus
+// //   note      String?
+// //   updatedBy String?
+// //   createdAt DateTime     @default(now())
+// // }
+
+// // model Verification {
+// //   id         String   @id @default(cuid())
+// //   report     Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
+// //   reportId   String
+// //   verifier   User     @relation(fields: [verifierId], references: [id])
+// //   verifierId String
+// //   isVerified Boolean  @default(true)
+// //   createdAt  DateTime @default(now())
+// //   @@unique([reportId, verifierId])
+// // }
+
+// // model Notification {
+// //   id        String           @id @default(cuid())
+// //   user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+// //   userId    String
+// //   type      NotificationType
+// //   title     String
+// //   message   String
+// //   reportId  String?
+// //   isRead    Boolean          @default(false)
+// //   createdAt DateTime         @default(now())
+// // }
+
+// // model ReportTemplate {
+// //   id           String      @id @default(cuid())
+// //   name         String
+// //   category     String?
+// //   title        String
+// //   description  String
+// //   department   Department? @relation(fields: [departmentId], references: [id])
+// //   departmentId String?
+// //   isActive     Boolean     @default(true)
+// //   createdAt    DateTime    @default(now())
+// //   updatedAt    DateTime    @updatedAt
+// // }
+
+
+// generator client {
+//   provider = "prisma-client-js"
+// }
+
+// datasource db {
+//   provider = "postgresql"
+//   url      = env("DATABASE_URL")
+// }
+
+// enum Role {
+//   USER
+//   ADMIN
+//   SUPER_ADMIN
+// }
+
+// enum ReportStatus {
+//   PENDING
+//   IN_PROGRESS
+//   PENDING_VERIFICATION
+//   RESOLVED
+//   REJECTED
+// }
+
+// enum Priority {
+//   LOW
+//   MEDIUM
+//   HIGH
+//   CRITICAL
+// }
+
+// enum NotificationType {
+//   EMAIL
+//   SMS
+//   IN_APP
+// }
+
+// model User {
+//   id                String         @id @default(cuid())
+//   clerkId           String         @unique
+//   email             String         @unique
+//   role              Role           @default(USER)
+//   firstName         String?
+//   lastName          String?
+//   phone             String?
+//   strikeCount       Int            @default(0)
+//   isBanned          Boolean        @default(false)
+//   reputationPoints  Int            @default(0)
+//   verifiedReports   Int            @default(0)
+//   trustScore        Float          @default(0.0)
+//   emailNotifications Boolean       @default(true)
+//   smsNotifications   Boolean       @default(false)
+//   reports           Report[]
+//   adminProfile      AdminProfile?
+//   verifications     Verification[]
+//   notifications     Notification[]
+//   createdAt         DateTime       @default(now())
+//   updatedAt         DateTime       @updatedAt
+// }
+
+// model AdminProfile {
+//   id            String     @id @default(cuid())
+//   user          User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+//   userId        String     @unique
+//   department    Department @relation(fields: [departmentId], references: [id])
+//   departmentId  String
+//   designation   String?
+//   employeeId    String?
+//   phone         String?
+//   isVerified    Boolean    @default(false)
+// }
+
+// model State {
+//   id     String @id @default(cuid())
+//   name   String @unique
+//   cities City[]
+// }
+
+// model City {
+//   id          String       @id @default(cuid())
+//   name        String
+//   state       State        @relation(fields: [stateId], references: [id])
+//   stateId     String
+//   areas       Area[]
+//   departments Department[]
+//   reports     Report[]
+//   @@unique([name, stateId])
+// }
+
+// model Area {
+//   id      String   @id @default(cuid())
+//   name    String
+//   city    City     @relation(fields: [cityId], references: [id], onDelete: Cascade)
+//   cityId  String
+//   reports Report[]
+//   @@unique([name, cityId])
+// }
+
+// model Department {
+//   id        String           @id @default(cuid())
+//   name      String
+//   city      City             @relation(fields: [cityId], references: [id], onDelete: Cascade)
+//   cityId    String
+//   admins    AdminProfile[]
+//   reports   Report[]
+//   templates ReportTemplate[]
+//   @@unique([name, cityId])
+// }
+
+// model Report {
+//   id                           String         @id @default(cuid())
+//   reportId                     String         @unique
+//   author                       User           @relation(fields: [authorId], references: [id])
+//   authorId                     String
+//   city                         City           @relation(fields: [cityId], references: [id])
+//   cityId                       String
+//   area                         Area?          @relation(fields: [areaId], references: [id])
+//   areaId                       String?
+//   department                   Department     @relation(fields: [departmentId], references: [id])
+//   departmentId                 String
+//   title                        String
+//   description                  String
+//   imageUrl                     String?
+//   aiImageUrl                   String?
+  
+//   weatherForecast              String?
+//   aiRiskAnalysis               String?
+//   pdfReportBase64              String?
+//   lastWeatherScan              DateTime?
+
+//   status                       ReportStatus   @default(PENDING)
+//   priority                     Priority       @default(MEDIUM)
+//   category                     String?
+//   tags                         Tag[]
+//   latitude                     Float?
+//   longitude                    Float?
+//   adminNote                    String?
+//   estimatedCost                Float?
+//   actualCost                   Float?
+//   isVerified                   Boolean        @default(false)
+//   verificationCount            Int            @default(0)
+//   pendingVerificationExpiresAt DateTime?
+//   shareToken                   String?        @unique
+//   isPublic                     Boolean        @default(false)
+//   images                       ReportImage[]
+//   videos                       ReportVideo[]
+//   updates                      ReportUpdate[]
+//   verifications                Verification[]
+//   createdAt                    DateTime       @default(now())
+//   updatedAt                    DateTime       @updatedAt
+// }
+
+// model ReportImage {
+//   id        String   @id @default(cuid())
+//   report    Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
+//   reportId  String
+//   url       String
+//   isBefore  Boolean  @default(false)
+//   order     Int      @default(0)
+//   createdAt DateTime @default(now())
+// }
+
+// model ReportVideo {
+//   id         String   @id @default(cuid())
+//   report     Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
+//   reportId   String
+//   url        String?
+//   playbackId String?
+//   assetId    String?
+//   order      Int      @default(0)
+//   createdAt  DateTime @default(now())
+// }
+
+// model Tag {
+//   id        String   @id @default(cuid())
+//   name      String   @unique
+//   reports   Report[]
+//   createdAt DateTime @default(now())
+// }
+
+// model ReportUpdate {
+//   id        String       @id @default(cuid())
+//   report    Report       @relation(fields: [reportId], references: [id], onDelete: Cascade)
+//   reportId  String
+//   oldStatus ReportStatus?
+//   newStatus ReportStatus
+//   note      String?
+//   updatedBy String?
+//   createdAt DateTime     @default(now())
+// }
+
+// model Verification {
+//   id         String   @id @default(cuid())
+//   report     Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
+//   reportId   String
+//   verifier   User     @relation(fields: [verifierId], references: [id])
+//   verifierId String
+//   isVerified Boolean  @default(true)
+//   createdAt  DateTime @default(now())
+//   @@unique([reportId, verifierId])
+// }
+
+// model Notification {
+//   id        String           @id @default(cuid())
+//   user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+//   userId    String
+//   type      NotificationType
+//   title     String
+//   message   String
+//   reportId  String?
+//   isRead    Boolean          @default(false)
+//   createdAt DateTime         @default(now())
+// }
+
+// model ReportTemplate {
+//   id           String      @id @default(cuid())
+//   name         String
+//   category     String?
+//   title        String
+//   description  String
+//   department   Department? @relation(fields: [departmentId], references: [id])
+//   departmentId String?
+//   isActive     Boolean     @default(true)
+//   createdAt    DateTime    @default(now())
+//   updatedAt    DateTime    @updatedAt
+// }
+
 
 generator client {
   provider = "prisma-client-js"
@@ -9,22 +461,19 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// --- ENUMS ---
-
 enum Role {
   USER
-  ADMIN       // Department Official (e.g., Water Dept Head)
-  SUPER_ADMIN // You and your team
+  ADMIN
+  SUPER_ADMIN
 }
 
 enum ReportStatus {
   PENDING
   IN_PROGRESS
-  PENDING_VERIFICATION // Awaiting confirmation from reporter
+  PENDING_VERIFICATION
   RESOLVED
-  REJECTED    // For fake/invalid reports
+  REJECTED
 }
-
 
 enum Priority {
   LOW
@@ -39,265 +488,198 @@ enum NotificationType {
   IN_APP
 }
 
-// --- MODELS ---
-
 model User {
-  id           String   @id @default(cuid())
-  clerkId      String   @unique // We link Clerk ID here
-  email        String   @unique
-  role         Role     @default(USER)
-  
-  // Basic Profile (Encrypted logic to be handled in API)
-  firstName    String?
-  lastName     String?
-  phone        String?
-  
-  // For "Fake Report" Tracking
-  // If a user submits fake reports, Admin increases this. 
-  // If strikeCount >= 3, they get banned.
-  strikeCount  Int      @default(0)
-  isBanned     Boolean  @default(false)
-  
-  // Reputation System
-  reputationPoints  Int      @default(0)
-  verifiedReports   Int      @default(0)
-  trustScore        Float    @default(0.0)
-  
-  // Notification Preferences
-  emailNotifications Boolean @default(true)
-  smsNotifications   Boolean @default(false)
-  
-  // Relations
-  reports      Report[]
-  adminProfile AdminProfile? // Only exists if role is ADMIN
-verifications Verification[]
-  notifications Notification[]
-  
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id                String         @id @default(cuid())
+  clerkId           String         @unique
+  email             String         @unique
+  role              Role           @default(USER)
+  firstName         String?
+  lastName          String?
+  phone             String?
+  strikeCount       Int            @default(0)
+  isBanned          Boolean        @default(false)
+  reputationPoints  Int            @default(0)
+  verifiedReports   Int            @default(0)
+  trustScore        Float          @default(0.0)
+  emailNotifications Boolean       @default(true)
+  smsNotifications   Boolean       @default(false)
+  reports           Report[]
+  adminProfile      AdminProfile?
+  verifications     Verification[]
+  notifications     Notification[]
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
 }
 
-// AdminProfile: Links a User to a specific Department in a specific City
 model AdminProfile {
-  id             String       @id @default(cuid())
-  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId         String       @unique
-
-  department     Department   @relation(fields: [departmentId], references: [id])
-  departmentId   String
-
-  // New Real-World Fields
-  designation    String?      // e.g. "Zonal Officer", "Junior Engineer"
-  employeeId     String?      // e.g. "GOV-MH-8821"
-  phone          String?      // Official Contact
-
-  isVerified     Boolean      @default(false) 
+  id            String     @id @default(cuid())
+  user          User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId        String     @unique
+  department    Department @relation(fields: [departmentId], references: [id])
+  departmentId  String
+  designation   String?
+  employeeId    String?
+  phone         String?
+  isVerified    Boolean    @default(false)
 }
-
-// Comments on Reports
-// (Removed) -- Comments feature has been deprecated and removed from the schema.
-
-// --- LOCATION & HIERARCHY ---
-// Structure: State -> City/Corp -> Area/Zone -> Department
 
 model State {
   id     String @id @default(cuid())
-  name   String @unique // e.g., "Maharashtra"
+  name   String @unique
   cities City[]
 }
 
 model City {
   id          String       @id @default(cuid())
-  name        String       // e.g., "Pandharpur Municipal Corporation"
+  name        String
   state       State        @relation(fields: [stateId], references: [id])
   stateId     String
-  
-  areas       Area[]       // e.g., "Station Road", "Temple Area"
+  areas       Area[]
   departments Department[]
   reports     Report[]
-
-  @@unique([name, stateId]) // Prevent duplicate cities in same state
+  @@unique([name, stateId])
 }
 
 model Area {
   id      String   @id @default(cuid())
-  name    String   // e.g., "Ward No. 1", "Isbavi"
+  name    String
   city    City     @relation(fields: [cityId], references: [id], onDelete: Cascade)
   cityId  String
-  
   reports Report[]
-
-  @@unique([name, cityId]) // Prevent duplicate areas in same city
+  @@unique([name, cityId])
 }
 
 model Department {
-  id        String   @id @default(cuid())
-  name      String   // e.g., "Water Supply", "Sanitation"
-  city      City     @relation(fields: [cityId], references: [id], onDelete: Cascade)
+  id        String           @id @default(cuid())
+  name      String
+  city      City             @relation(fields: [cityId], references: [id], onDelete: Cascade)
   cityId    String
-  
   admins    AdminProfile[]
   reports   Report[]
   templates ReportTemplate[]
-
-  @@unique([name, cityId]) // Prevent duplicate depts in same city
+  @@unique([name, cityId])
 }
-
-// --- THE CORE ISSUE REPORT ---
 
 model Report {
-  id          String   @id @default(cuid())
+  id                           String         @id @default(cuid())
+  reportId                     String         @unique
+  author                       User           @relation(fields: [authorId], references: [id])
+  authorId                     String
+  city                         City           @relation(fields: [cityId], references: [id])
+  cityId                       String
+  area                         Area?          @relation(fields: [areaId], references: [id])
+  areaId                       String?
+  department                   Department     @relation(fields: [departmentId], references: [id])
+  departmentId                 String
+  title                        String
+  description                  String
+  imageUrl                     String?
   
-  // The Public ID for tracking (e.g., "PN-7782")
-  reportId    String   @unique 
-  
-  // Author is linked for backend tracking, but kept anonymous in UI
-  author      User     @relation(fields: [authorId], references: [id])
-  authorId    String
+  // --- AI & AUTOMATION FIELDS ---
+  aiImageUrl                   String?
+  weatherForecast              String?
+  aiRiskAnalysis               String?
+  pdfReportBase64              String?
+  lastWeatherScan              DateTime?
+  // ------------------------------
 
-
-  // Where is the problem?
-  city        City       @relation(fields: [cityId], references: [id])
-  cityId      String
+  status                       ReportStatus   @default(PENDING)
+  priority                     Priority       @default(MEDIUM)
+  category                     String?
   
-  // Area is optional (GPS used primarily)
-  area        Area?      @relation(fields: [areaId], references: [id])
-  areaId      String?
+  // --- THIS IS THE LINE I MISSED ---
+  tags                         Tag[]
+  // ---------------------------------
   
-  // Who should fix it?
-  department  Department @relation(fields: [departmentId], references: [id])
-  departmentId String
-
-  // Issue Details
-  title       String
-  description String
-  imageUrl    String?    // URL from storage (e.g., Sanity/AWS) - DEPRECATED: Use ReportImage model
-  status      ReportStatus @default(PENDING)
-  priority    Priority     @default(MEDIUM)
-  
-  // --- UPDATED: Simple String for Category ---
-  category    String?    
-  
-  // Tags (Kept as separate model for now)
-  tags        Tag[]
-  
-  // Real-world Geolocation
-  latitude    Float?     
-  longitude   Float?
-  
-  // Admin Feedback/Action
-  adminNote   String?    // e.g., "Work started, JCB dispatched"
-  estimatedCost Float?   // Estimated cost to resolve
-  actualCost    Float?   // Actual cost incurred
-  
-  // Verification
-  isVerified     Boolean  @default(false)
-  verificationCount Int   @default(0)
-  pendingVerificationExpiresAt DateTime? // When pending verification should auto-close
-  
-  // Sharing
-  shareToken   String?   @unique // For public sharing
-  isPublic     Boolean   @default(false)
-  
-  // Relations
-  images       ReportImage[]
-  videos       ReportVideo[]
-  updates      ReportUpdate[]
-  verifications Verification[]
-  
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  latitude                     Float?
+  longitude                    Float?
+  adminNote                    String?
+  estimatedCost                Float?
+  actualCost                   Float?
+  isVerified                   Boolean        @default(false)
+  verificationCount            Int            @default(0)
+  pendingVerificationExpiresAt DateTime?
+  shareToken                   String?        @unique
+  isPublic                     Boolean        @default(false)
+  images                       ReportImage[]
+  videos                       ReportVideo[]
+  updates                      ReportUpdate[]
+  verifications                Verification[]
+  createdAt                    DateTime       @default(now())
+  updatedAt                    DateTime       @updatedAt
 }
 
-// Multiple Images per Report
 model ReportImage {
   id        String   @id @default(cuid())
   report    Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
   reportId  String
   url       String
-  isBefore  Boolean  @default(false) // For before/after photos
-  order     Int      @default(0)     // Display order
+  isBefore  Boolean  @default(false)
+  order     Int      @default(0)
   createdAt DateTime @default(now())
 }
 
-// Multiple Videos per Report
 model ReportVideo {
-  id          String   @id @default(cuid())
-  report      Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
-  reportId    String
-  url         String?               // legacy / external URLs
-  playbackId  String?               // Mux playback ID (stream.mux.com/...)
-  assetId     String?               // optional Mux asset ID for reference
-  order       Int      @default(0)   // Display order
-  createdAt   DateTime @default(now())
+  id         String   @id @default(cuid())
+  report     Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  reportId   String
+  url        String?
+  playbackId String?
+  assetId    String?
+  order      Int      @default(0)
+  createdAt  DateTime @default(now())
 }
 
-// --- DELETED: model Category {} ---
-
-// Tags for Reports (Kept as requested)
 model Tag {
   id        String   @id @default(cuid())
-  name      String
-  reports   Report[]
+  name      String   @unique
   createdAt DateTime @default(now())
-  
-  @@unique([name])
+  reports   Report[]
 }
 
-// Comments on Reports
-// (Removed) The Comment model has been deprecated and removed. Use report updates or admin notes for communication and audit trails.
-
-// Status Update History / Timeline
 model ReportUpdate {
-  id        String   @id @default(cuid())
-  report    Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  id        String       @id @default(cuid())
+  report    Report       @relation(fields: [reportId], references: [id], onDelete: Cascade)
   reportId  String
   oldStatus ReportStatus?
   newStatus ReportStatus
   note      String?
-  updatedBy String?  // Admin ID or system
-  createdAt DateTime @default(now())
+  updatedBy String?
+  createdAt DateTime     @default(now())
 }
 
-// Verification System
 model Verification {
-  id        String   @id @default(cuid())
-  report    Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
-  reportId  String
-  verifier  User     @relation(fields: [verifierId], references: [id])
+  id         String   @id @default(cuid())
+  report     Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  reportId   String
+  verifier   User     @relation(fields: [verifierId], references: [id])
   verifierId String
-  isVerified Boolean @default(true)
-  createdAt DateTime @default(now())
-  
-  @@unique([reportId, verifierId]) // One verification per user per report
+  isVerified Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  @@unique([reportId, verifierId])
 }
 
-// Notifications (PRESERVED)
 model Notification {
-  id        String   @id @default(cuid())
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id        String           @id @default(cuid())
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId    String
   type      NotificationType
   title     String
   message   String
-  reportId  String?  // Link to report if applicable
-  isRead    Boolean  @default(false)
-  createdAt DateTime @default(now())
+  reportId  String?
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
 }
 
-// Report Templates
 model ReportTemplate {
-  id          String   @id @default(cuid())
-  name        String
-  
-  // Updated to match removal of Category model
-  category    String? 
-  
-  title       String
-  description String
-  department  Department? @relation(fields: [departmentId], references: [id])
+  id           String      @id @default(cuid())
+  name         String
+  category     String?
+  title        String
+  description  String
+  department   Department? @relation(fields: [departmentId], references: [id])
   departmentId String?
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  isActive     Boolean     @default(true)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
 }
