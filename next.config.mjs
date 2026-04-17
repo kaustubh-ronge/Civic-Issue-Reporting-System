@@ -1,5 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+    serverExternalPackages: ['pdfkit'],
     experimental: {
         // 1. This handles the Server Action limit
         serverActions: {

@@ -1,3 +1,5 @@
+
+
 'use client'
 
 import { useState, useEffect } from "react"
@@ -6,11 +8,13 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { MapPin, Clock, Building2, ArrowLeft, Loader2, Image as ImageIcon, Video } from "lucide-react"
+import { MapPin, Clock, Building2, ArrowLeft, Loader2, Image as ImageIcon, Video, Sparkles, ShieldAlert, DownloadCloud } from "lucide-react"
 import { formatDistanceToNow, format } from "date-fns"
 import { useRouter } from "next/navigation"
 import { updateReportStatus } from "@/actions/adminDashboardActions"
 import { toast } from "sonner"
+import { motion } from "framer-motion"
+import LeafletLocationMap from "@/components/LeafletLocationMap"
 
 export default function AdminReportDetailClient({ report, user, adminProfile }) {
     const router = useRouter()
@@ -18,7 +22,38 @@ export default function AdminReportDetailClient({ report, user, adminProfile }) 
     const [newStatus, setNewStatus] = useState(report.status)
     const [adminNote, setAdminNote] = useState(report.adminNote || "")
 
-    // 🔹 FIX: Combine legacy imageUrl and new images array with deduplication
+    // Download PDF helper
+    const handleDownloadPDF = async () => {
+        if (!report.reportId) return;
+        try {
+            const response = await fetch(`/api/reports/${report.reportId}/pdf?ts=${Date.now()}`, {
+                method: "GET",
+                cache: "no-store"
+            });
+
+            if (!response.ok) {
+                throw new Error("Failed to download report PDF");
+            }
+
+            const receivedReportId = response.headers.get("x-report-id");
+            if (receivedReportId && receivedReportId !== report.reportId) {
+                throw new Error(`Report mismatch detected. Expected ${report.reportId}, got ${receivedReportId}`);
+            }
+
+            const blob = await response.blob();
+            const objectUrl = URL.createObjectURL(blob);
+            const downloadLink = document.createElement("a");
+            downloadLink.href = objectUrl;
+            downloadLink.download = `CivicAudit_${report.reportId}.pdf`;
+            downloadLink.rel = "noopener";
+            downloadLink.click();
+            URL.revokeObjectURL(objectUrl);
+        } catch (error) {
+            console.error("PDF download failed:", error);
+            alert("Unable to download the correct PDF right now. Please try again.");
+        }
+    };
+
     let allImages = report.images ? [...report.images] : [];
     {
         const seen = new Set();
@@ -37,7 +72,7 @@ export default function AdminReportDetailClient({ report, user, adminProfile }) 
         const seen = new Set();
         allVideos = allVideos.filter(v => {
             let key = v.playbackId || v.url || '';
-            if (!key) key = v.id; // fallback if neither url nor playbackId present
+            if (!key) key = v.id; 
             if (seen.has(key)) return false;
             seen.add(key);
             return true;
@@ -91,7 +126,6 @@ export default function AdminReportDetailClient({ report, user, adminProfile }) 
         )
     }
 
-
     const statusColors = {
         PENDING: "bg-yellow-500/10 text-yellow-500 border-yellow-500/20",
         IN_PROGRESS: "bg-blue-500/10 text-blue-500 border-blue-500/20",
@@ -104,7 +138,6 @@ export default function AdminReportDetailClient({ report, user, adminProfile }) 
         setStatusLoading(true)
         const res = await updateReportStatus(report.id, newStatus, adminNote)
         if (res.success) {
-            // give more contextual feedback when resolving
             if (newStatus === 'RESOLVED') {
                 if (report.status === 'PENDING_VERIFICATION') {
                     toast.success('Report force‑marked as resolved.')
@@ -127,7 +160,6 @@ export default function AdminReportDetailClient({ report, user, adminProfile }) 
                 <ArrowLeft className="h-4 w-4 mr-2" /> Back to Dashboard
             </Button>
 
-            {/* Header */}
             <div className="flex items-start justify-between">
                 <div className="flex-1">
                     <div className="flex items-center gap-3 mb-3">
@@ -137,13 +169,61 @@ export default function AdminReportDetailClient({ report, user, adminProfile }) 
                     <h1 className="text-3xl font-bold text-white mb-2">{report.title}</h1>
                     <p className="text-slate-400 text-sm">Submitted {formatDistanceToNow(new Date(report.createdAt))} ago</p>
                 </div>
+                {report.pdfReportBase64 && (
+                    <Button onClick={handleDownloadPDF} variant="outline" size="sm" className="border-blue-500/30 text-blue-400 hover:bg-blue-500/10 hover:text-blue-300">
+                        <DownloadCloud className="h-4 w-4 mr-2" /> Download Detailed PDF
+                    </Button>
+                )}
             </div>
 
             <div className="grid md:grid-cols-3 gap-6">
-                {/* Left Column */}
                 <div className="md:col-span-2 space-y-6">
                     
-                    {/* PHOTO EVIDENCE GALLERY */}
+                    {/* YOLO AI PROOF IMAGE */}
+                    {report.aiImageUrl && (
+                        <Card className="bg-orange-950/20 backdrop-blur-xl border-orange-500/30">
+                            <CardHeader>
+                                <CardTitle className="text-orange-400 flex items-center gap-2">
+                                    <Sparkles className="h-5 w-5" />
+                                    AI Verified Blueprint
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="rounded-lg overflow-hidden border border-orange-500/30 aspect-video bg-black relative group">
+                                    <img src={report.aiImageUrl} alt="AI Proof" className="w-full h-full object-cover" />
+                                    <a href={report.aiImageUrl} target="_blank" rel="noreferrer" className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-sm font-medium">
+                                        View Full Size Analysis
+                                    </a>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    )}
+
+                    {/* WEATHER & ENVIRONMENTAL RISK AUDIT */}
+                    {report.aiRiskAnalysis && (
+                        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+                            <Card className="bg-blue-950/20 border border-blue-500/30 shadow-[0_0_20px_rgba(59,130,246,0.1)]">
+                                <CardHeader className="border-b border-blue-500/10 pb-4 flex flex-row items-center justify-between">
+                                    <CardTitle className="text-blue-400 flex items-center gap-2 text-lg">
+                                        <ShieldAlert className="h-5 w-5" /> Automated Environmental Audit
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="p-6">
+                                    <div className="prose prose-invert prose-sm max-w-none text-slate-300">
+                                        <p className="mb-4 font-semibold text-blue-300">Predictive Risk & Prevention Strategy:</p>
+                                        <p className="leading-relaxed">{report.aiRiskAnalysis}</p>
+                                    </div>
+                                    <div className="mt-4 pt-4 border-t border-blue-500/10 flex items-center justify-between text-xs text-blue-400/60">
+                                        <div className="flex items-center">
+                                            <Clock className="h-3 w-3 mr-1" />
+                                            Last Weather Scan: {report.lastWeatherScan ? formatDistanceToNow(new Date(report.lastWeatherScan)) : 'Recently'} ago
+                                        </div>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        </motion.div>
+                    )}
+                    
                     {allImages.length > 0 && (
                         <Card className="bg-slate-900/80 backdrop-blur-xl border-white/10">
                             <CardHeader>
@@ -167,7 +247,6 @@ export default function AdminReportDetailClient({ report, user, adminProfile }) 
                         </Card>
                     )}
 
-                    {/* VIDEO EVIDENCE GALLERY */}
                     {allVideos.length > 0 ? (
                         <>
                             <Card className="bg-slate-900/80 backdrop-blur-xl border-white/10">
@@ -187,39 +266,6 @@ export default function AdminReportDetailClient({ report, user, adminProfile }) 
                                     </div>
                                 </CardContent>
                             </Card>
-
-                            {/* MAP (same as public view) */}
-                            {(() => {
-                                const lat = parseFloat(report.latitude)
-                                const lon = parseFloat(report.longitude)
-                                const valid = Number.isFinite(lat) && Number.isFinite(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180
-                                if (!valid) return null
-                                const delta = 0.002
-                                return (
-                                    <Card className="bg-slate-900/80 backdrop-blur-xl border-white/10 mt-6">
-                                        <CardHeader>
-                                            <CardTitle className="text-white flex items-center gap-2">
-                                                <MapPin className="h-5 w-5 text-orange-400" /> Location
-                                            </CardTitle>
-                                        </CardHeader>
-                                        <CardContent className="p-6">
-                                            <div className="rounded-xl overflow-hidden border border-white/10 relative group">
-                                                <iframe
-                                                    width="100%" height="200" frameBorder="0"
-                                                    style={{ border: 0, filter: "invert(90%) hue-rotate(180deg)" }}
-                                                    src={`https://www.openstreetmap.org/export/embed.html?bbox=${lon - delta},${lat - delta},${lon + delta},${lat + delta}&layer=mapnik&marker=${lat},${lon}`}
-                                                    allowFullScreen
-                                                />
-                                                <a href={`http://maps.google.com/maps?q=${lat},${lon}`} target="_blank" rel="noreferrer" className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    <Button size="sm" variant="secondary" className="gap-2">
-                                                        <MapPin className="h-3 w-3" /> Open in Google Maps
-                                                    </Button>
-                                                </a>
-                                            </div>
-                                        </CardContent>
-                                    </Card>
-                                )
-                            })()}
                         </>
                     ) : (
                         <Card className="bg-slate-900/80 backdrop-blur-xl border-white/10">
@@ -229,7 +275,34 @@ export default function AdminReportDetailClient({ report, user, adminProfile }) 
                         </Card>
                     )}
 
-                    {/* Description */}
+                    {(() => {
+                        const lat = parseFloat(report.latitude)
+                        const lon = parseFloat(report.longitude)
+                        const valid = Number.isFinite(lat) && Number.isFinite(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180
+                        if (!valid) return null
+                        return (
+                            <Card className="bg-slate-900/80 backdrop-blur-xl border-white/10 mt-6">
+                                <CardHeader>
+                                    <CardTitle className="text-white flex items-center gap-2">
+                                        <MapPin className="h-5 w-5 text-orange-400" /> Location
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="p-6">
+                                    <div className="rounded-xl overflow-hidden border border-white/10 relative">
+                                        <LeafletLocationMap latitude={lat} longitude={lon} className="w-full h-[260px]" />
+                                    </div>
+                                    <div className="mt-3">
+                                        <a href={`http://maps.google.com/maps?q=${lat},${lon}`} target="_blank" rel="noreferrer">
+                                            <Button size="sm" variant="secondary" className="gap-2">
+                                                <MapPin className="h-3 w-3" /> Open in Google Maps
+                                            </Button>
+                                        </a>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        )
+                    })()}
+
                     <Card className="bg-slate-900/80 backdrop-blur-xl border-white/10">
                         <CardHeader>
                             <CardTitle className="text-white">Description</CardTitle>
@@ -239,7 +312,6 @@ export default function AdminReportDetailClient({ report, user, adminProfile }) 
                         </CardContent>
                     </Card>
 
-                    {/* Action Form */}
                     <Card className="bg-slate-900/80 backdrop-blur-xl border-white/10">
                         <CardHeader>
                             <CardTitle className="text-white">Update Status</CardTitle>
@@ -260,8 +332,6 @@ export default function AdminReportDetailClient({ report, user, adminProfile }) 
                             </div>
                             <div className="space-y-2">
                                 <label className="text-sm font-medium text-slate-400">Admin Note</label>
-
-
                                 <Textarea value={adminNote} onChange={(e) => setAdminNote(e.target.value)} placeholder="Action taken..." className="bg-slate-950 border-white/10 text-white min-h-30" />
                             </div>
                             <Button onClick={handleUpdateStatus} disabled={statusLoading} className="w-full bg-orange-600 hover:bg-orange-500 text-white">
@@ -271,7 +341,6 @@ export default function AdminReportDetailClient({ report, user, adminProfile }) 
                     </Card>
                 </div>
 
-                {/* Right Column */}
                 <div className="space-y-6">
                     <Card className="bg-slate-900/80 backdrop-blur-xl border-white/10">
                         <CardHeader><CardTitle className="text-white text-lg">Report Info</CardTitle></CardHeader>
