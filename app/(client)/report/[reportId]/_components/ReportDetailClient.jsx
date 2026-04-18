@@ -94,7 +94,7 @@ export default function ReportDetailClient({
 
         startTransition(async () => {
             try {
-                const result = await confirmAction()
+                const result = await confirmAction(new FormData(e.target))
                 if (result?.success) {
                     toast.success("Resolution confirmed!")
                     router.refresh()
@@ -125,7 +125,7 @@ export default function ReportDetailClient({
 
         startTransition(async () => {
             try {
-                const result = await reopenAction()
+                const result = await reopenAction(new FormData(e.target))
                 if (result?.success) {
                     toast.success("Report reopened successfully!")
                     setShowReopen(false)

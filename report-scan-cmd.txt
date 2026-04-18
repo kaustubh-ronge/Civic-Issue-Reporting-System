@@ -1,0 +1,5 @@
+node demo-reset.mjs
+
+
+
+Invoke-RestMethod -Uri "http://localhost:3000/api/cron/weather-analyzer" -Headers @{ "Authorization" = "Bearer 4a9329ad261f456cbd90650e1d9f2daa089556a427d145bcb9c497d5a16c1b15" }
