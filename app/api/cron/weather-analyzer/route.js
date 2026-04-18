@@ -28,9 +28,9 @@ export async function GET(request) {
 
         const totalCandidates = await db.report.count({ where: whereClause });
         if (totalCandidates === 0) {
-            return NextResponse.json({ 
-                success: true, 
-                message: "No reports require environmental scanning at this time." 
+            return NextResponse.json({
+                success: true,
+                message: "No reports require environmental scanning at this time."
             });
         }
 
@@ -57,12 +57,12 @@ export async function GET(request) {
             }
         }
 
-        return NextResponse.json({ 
-            success: true, 
+        return NextResponse.json({
+            success: true,
             totalCandidates,
             scannedCount: processedCount,
             errors: errors.length > 0 ? errors : null,
-            message: `Batch Scan Complete. Processed ${processedCount} reports from ${totalCandidates} eligible records.` 
+            message: `Batch Scan Complete. Processed ${processedCount} reports from ${totalCandidates} eligible records.`
         });
 
     } catch (error) {
