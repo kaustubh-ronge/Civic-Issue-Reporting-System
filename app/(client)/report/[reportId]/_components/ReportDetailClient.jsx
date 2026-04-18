@@ -13,6 +13,7 @@ import FloatingParticles from "@/components/FloatingParticles"
 import { useState, useTransition, useEffect } from 'react'
 import { toast } from "sonner"
 import { confirmResolutionSchema, reopenReportSchema, validateObject, formatValidationErrors } from "@/lib/validation-schemas"
+import MuxPlayer from "@mux/mux-player-react"
 
 export default function ReportDetailClient({ 
     report, 
@@ -167,9 +168,10 @@ export default function ReportDetailClient({
     }
 
     function VideoLoader({ video }) {
-        const [src, setSrc] = useState(null)
+        const [src, setSrc] = useState(video.url || null)
         const [error, setError] = useState(false)
         useEffect(() => {
+            if (video.playbackId || src) return;
             let cancelled = false
             import("@/actions/reportActions").then(({ getVideoUrl }) => {
                 if (!video.id) return
@@ -186,7 +188,17 @@ export default function ReportDetailClient({
                     })
             })
             return () => { cancelled = true }
-        }, [video.id])
+        }, [video.id, video.playbackId, src])
+
+        if (video.playbackId) {
+            return (
+                <MuxPlayer
+                    playbackId={video.playbackId}
+                    metadata={{ video_id: video.id, video_title: 'Evidence Video' }}
+                    className="w-full h-full object-cover"
+                />
+            )
+        }
 
         if (src === null && !error) {
             return <div className="aspect-video bg-black flex items-center justify-center text-slate-500">Loading video…</div>
