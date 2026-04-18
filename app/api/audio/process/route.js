@@ -1,25 +1,19 @@
-
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { createReport } from '@/actions/reportActions';
-import { createReportSchema, validateFormData, formatValidationErrors } from '@/lib/validation-schemas';
+import { processAudioSubmission } from '@/actions/reportActions';
+import { processAudioSubmissionSchema, validateFormData, formatValidationErrors } from '@/lib/validation-schemas';
 
 export async function POST(request) {
     try {
-        // 1. Check if the request is actually FormData
         const contentType = request.headers.get("content-type");
         if (!contentType || !contentType.includes("multipart/form-data")) {
-            return NextResponse.json({ 
-                success: false, 
-                error: "Invalid Content-Type. Expected multipart/form-data" 
-            }, { status: 400 });
+            return NextResponse.json({ success: false, error: "Invalid Content-Type. Expected multipart/form-data" }, { status: 400 });
         }
 
-        // 2. Parse the body
         const formData = await request.formData();
         
-        // 3. Validate with Zod
-        const validation = await validateFormData(formData, createReportSchema);
+        // Validate with Zod
+        const validation = await validateFormData(formData, processAudioSubmissionSchema);
         
         if (!validation.success) {
             return NextResponse.json({ 
@@ -29,12 +23,11 @@ export async function POST(request) {
             }, { status: 400 });
         }
 
-        // 4. Trigger the Server Action with validated data
-        const result = await createReport(formData);
-        
+        const result = await processAudioSubmission(formData);
+
         return NextResponse.json(result);
     } catch (error) {
-        console.error("CRITICAL_API_ERROR:", error);
+        console.error("AUDIO_PROCESS_API_ERROR:", error);
         
         if (error instanceof z.ZodError) {
             return NextResponse.json({ 

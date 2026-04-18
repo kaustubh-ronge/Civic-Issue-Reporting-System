@@ -1,6 +1,8 @@
 'use server'
 
 import { db } from "@/lib/prisma"
+import { z } from 'zod'
+import { getDepartmentsByCitySchema, validateObject, formatValidationErrors } from '@/lib/validation-schemas'
 
 // Used to populate the "City" dropdown in the Report Form
 export async function getSupportedCities() {
@@ -19,6 +21,12 @@ export async function getSupportedCities() {
 // Used to populate "Department" dropdown based on selected City
 export async function getDepartmentsByCity(cityId) {
     try {
+        // Validate city ID
+        const validation = await validateObject({ cityId }, getDepartmentsByCitySchema)
+        if (!validation.success) {
+            return { success: false, depts: [], error: "Invalid city ID" }
+        }
+
         const depts = await db.department.findMany({
             where: { cityId: cityId },
             orderBy: { name: 'asc' },

@@ -11,6 +11,8 @@ import { useRouter } from "next/navigation"
 import { motion } from "framer-motion"
 import FloatingParticles from "@/components/FloatingParticles" 
 import { useState, useTransition, useEffect } from 'react'
+import { toast } from "sonner"
+import { confirmResolutionSchema, reopenReportSchema, validateObject, formatValidationErrors } from "@/lib/validation-schemas"
 
 export default function ReportDetailClient({ 
     report, 
@@ -26,6 +28,7 @@ export default function ReportDetailClient({
     const [isPending, startTransition] = useTransition()
     const [reopenReason, setReopenReason] = useState('')
     const [showReopen, setShowReopen] = useState(false)
+    const [formErrors, setFormErrors] = useState(null)
 
     const handleDownloadPDF = async () => {
         if (!report.reportId) return;
@@ -71,6 +74,67 @@ export default function ReportDetailClient({
                 }
             } catch (error) {
                 alert("An unexpected error occurred.")
+            }
+        })
+    }
+
+    const handleConfirm = async (e) => {
+        e.preventDefault()
+        setFormErrors(null)
+        
+        // Validate before submission
+        const validation = await validateObject({ reportId: report.id || report.reportId }, confirmResolutionSchema)
+        if (!validation.success) {
+            const formatted = formatValidationErrors(validation.errors)
+            setFormErrors(formatted)
+            toast.error(formatted.reportId || "Validation failed")
+            return
+        }
+
+        startTransition(async () => {
+            try {
+                const result = await confirmAction()
+                if (result?.success) {
+                    toast.success("Resolution confirmed!")
+                    router.refresh()
+                } else {
+                    toast.error(result?.error || "Failed to confirm resolution")
+                }
+            } catch (error) {
+                toast.error("An unexpected error occurred")
+            }
+        })
+    }
+
+    const handleReopen = async (e) => {
+        e.preventDefault()
+        setFormErrors(null)
+        
+        // Validate before submission
+        const validation = await validateObject(
+            { reportId: report.id || report.reportId, reason: reopenReason },
+            reopenReportSchema
+        )
+        if (!validation.success) {
+            const formatted = formatValidationErrors(validation.errors)
+            setFormErrors(formatted)
+            toast.error(formatted.reason || formatted.reportId || "Validation failed")
+            return
+        }
+
+        startTransition(async () => {
+            try {
+                const result = await reopenAction()
+                if (result?.success) {
+                    toast.success("Report reopened successfully!")
+                    setShowReopen(false)
+                    setReopenReason("")
+                    router.refresh()
+                } else {
+                    toast.error(result?.error || "Failed to reopen report")
+                }
+            } catch (error) {
+                toast.error("An unexpected error occurred")
             }
         })
     }
@@ -266,28 +330,35 @@ export default function ReportDetailClient({
                             </CardHeader>
                             <CardContent>
                                 <p className="text-slate-300 mb-4">An official has marked this report as resolved. Please confirm whether the issue is fixed.</p>
-                                <div className="flex items-center gap-3">
-                                    <form action={confirmAction}>
+                                <div className="flex items-center gap-3 flex-wrap">
+                                    <form onSubmit={handleConfirm}>
                                         <input type="hidden" name="reportId" value={report.id || report.reportId} />
-                                        <Button size="sm" type="submit" className="bg-green-600 text-white">Yes, it's fixed</Button>
+                                        <Button size="sm" type="submit" disabled={isPending} className="bg-green-600 text-white hover:bg-green-500">
+                                            {isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
+                                            {isPending ? "Confirming..." : "Yes, it's fixed"}
+                                        </Button>
                                     </form>
 
                                     {!showReopen ? (
                                         <Button variant="ghost" size="sm" onClick={() => setShowReopen(true)}>No, Re-open</Button>
                                     ) : (
-                                        <form action={reopenAction} className="flex items-center gap-2 w-full">
+                                        <form onSubmit={handleReopen} className="flex items-center gap-2 w-full flex-wrap">
                                             <input type="hidden" name="reportId" value={report.id || report.reportId} />
                                             <input type="hidden" name="reason" value={reopenReason} />
                                             <input
                                                 value={reopenReason}
                                                 onChange={(e) => setReopenReason(e.target.value)}
                                                 placeholder="Reason for re-opening (optional)"
-                                                className="bg-slate-900 border border-white/5 rounded-md px-3 py-2 text-sm text-white w-full"
+                                                className={`bg-slate-900 border ${formErrors?.reason ? 'border-red-500 focus:border-red-500' : 'border-white/5'} rounded-md px-3 py-2 text-sm text-white flex-1 min-w-64`}
                                             />
-                                            <Button size="sm" type="submit" className="bg-red-600 text-white">Re-open</Button>
+                                            <Button size="sm" type="submit" disabled={isPending} className="bg-red-600 text-white hover:bg-red-500">
+                                                {isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : "Re-open"}
+                                            </Button>
                                         </form>
                                     )}
                                 </div>
+                                {formErrors?.reason && <p className="text-xs text-red-400 mt-2 flex items-center gap-1\"><AlertCircle className="h-3 w-3" />{formErrors.reason}</p>}
+                                {formErrors?.reportId && <p className="text-xs text-red-400 mt-2 flex items-center gap-1\"><AlertCircle className="h-3 w-3" />{formErrors.reportId}</p>}
                             </CardContent>
                         </Card>
                     </motion.div>

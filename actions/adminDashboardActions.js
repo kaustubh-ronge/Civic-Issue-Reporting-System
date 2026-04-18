@@ -3,6 +3,8 @@
 import { db } from "@/lib/prisma"
 import { checkUser } from "@/lib/checkUser"
 import { revalidatePath } from "next/cache"
+import { z } from 'zod'
+import { updateReportStatusSchema, validateObject, formatValidationErrors } from '@/lib/validation-schemas'
 // Keep this import if you have the file, otherwise comment it out to avoid crashes
 import { sendNotification } from "@/lib/notifications" 
 
@@ -54,6 +56,15 @@ export async function getAdminReports() {
 
 export async function updateReportStatus(reportId, newStatus, adminNote, priority = null, estimatedCost = null) {
     try {
+        // Validate inputs
+        const validation = await validateObject(
+            { reportId, newStatus, adminNote, priority, estimatedCost },
+            updateReportStatusSchema
+        )
+        if (!validation.success) {
+            return { success: false, error: "Validation failed", errors: formatValidationErrors(validation.errors) }
+        }
+
         const user = await checkUser()
         if (!user || (user.role !== 'ADMIN' && user.role !== 'SUPER_ADMIN')) {
             return { success: false, error: "Unauthorized" }

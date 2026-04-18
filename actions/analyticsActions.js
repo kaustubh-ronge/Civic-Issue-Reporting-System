@@ -1,7 +1,17 @@
+'use server'
+
 import { db } from '@/lib/prisma'
+import { z } from 'zod'
+import { getAreaReportCountsSchema, getReportsByAreaSchema, validateObject, formatValidationErrors } from '@/lib/validation-schemas'
 
 export async function getAreaReportCounts(cityId, category = null) {
   try {
+    // Validate inputs
+    const validation = await validateObject({ cityId, category }, getAreaReportCountsSchema)
+    if (!validation.success) {
+      return []
+    }
+
     const whereReports = { status: { not: 'RESOLVED' } }
     if (category) whereReports.category = category
 
@@ -33,6 +43,12 @@ export async function getAreaReportCounts(cityId, category = null) {
 
 export async function getReportsByArea(areaId, category = null) {
   try {
+    // Validate inputs
+    const validation = await validateObject({ areaId, category }, getReportsByAreaSchema)
+    if (!validation.success) {
+      return []
+    }
+
     const whereClause = { areaId }
     if (category) whereClause.category = category
 

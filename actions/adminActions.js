@@ -3,9 +3,17 @@
 import { db } from "@/lib/prisma"
 import { checkUser } from "@/lib/checkUser"
 import { revalidatePath } from "next/cache"
+import { z } from 'zod'
+import { updateAdminProfileSchema, validateFormData, formatValidationErrors } from '@/lib/validation-schemas'
 
 export async function updateAdminProfile(formData) {
     try {
+        // Validate admin profile data
+        const validation = await validateFormData(formData, updateAdminProfileSchema)
+        if (!validation.success) {
+            return { success: false, error: "Validation failed", errors: formatValidationErrors(validation.errors) }
+        }
+
         const user = await checkUser()
         if (!user || (user.role !== 'ADMIN' && user.role !== 'SUPER_ADMIN')) {
             return { success: false, error: "Unauthorized" }

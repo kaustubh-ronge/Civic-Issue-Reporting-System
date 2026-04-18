@@ -631,6 +631,7 @@ import {
 } from "lucide-react"
 import { getDepartmentsByCity } from "@/actions/utilActions"
 import { createReport, processAudioSubmission } from "@/actions/reportActions"
+import { createReportSchema, validateFormData, formatValidationErrors } from "@/lib/validation-schemas"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
@@ -664,6 +665,7 @@ export default function ReportForm({ cities }) {
     const [loading, setLoading] = useState(false)
     const [showSuccessModal, setShowSuccessModal] = useState(false)
     const [submittedReportId, setSubmittedReportId] = useState("")
+    const [formErrors, setFormErrors] = useState(null)
 
     const [activeMainTab, setActiveMainTab] = useState("manual")
 
@@ -854,6 +856,7 @@ export default function ReportForm({ cities }) {
     const handleSubmit = async (e) => {
         e.preventDefault()
         setLoading(true)
+        setFormErrors(null)
 
         const formData = new FormData(e.target)
         formData.append("cityId", selectedCity)
@@ -874,6 +877,16 @@ export default function ReportForm({ cities }) {
             formData.append("aiImage", aiImageData)
         }
 
+        // Client-side validation
+        const validation = await validateFormData(formData, createReportSchema)
+        if (!validation.success) {
+            const formatted = formatValidationErrors(validation.errors)
+            setFormErrors(formatted)
+            toast.error("Please fix the validation errors below")
+            setLoading(false)
+            return
+        }
+
         if (videoFiles.length > 2) {
             toast.error("You can only upload up to 2 videos. Extra files were ignored.")
         }
@@ -891,10 +904,15 @@ export default function ReportForm({ cities }) {
             setAiImageData(null)
             setTitleInput("")
             setDescriptionInput("")
+            setFormErrors(null)
 
             if (res.warning) toast.warn(res.warning)
         } else {
-            toast.error(res.error)
+            // Handle server-side validation errors
+            if (res.errors) {
+                setFormErrors(res.errors)
+            }
+            toast.error(res.error || "Failed to submit report")
         }
         setLoading(false)
     }
@@ -1068,8 +1086,9 @@ export default function ReportForm({ cities }) {
                                     value={titleInput}
                                     onChange={(e) => setTitleInput(e.target.value)}
                                     required 
-                                    className={InputStyle} 
+                                    className={`${InputStyle} ${formErrors?.title ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20' : ''}`} 
                                 />
+                                {formErrors?.title && <p className="text-xs text-red-400 mt-1 flex items-center gap-1"><AlertCircle className="h-3 w-3" />{formErrors.title}</p>}
                             </div>
 
                             <div className="grid md:grid-cols-2 gap-6">
@@ -1139,8 +1158,9 @@ export default function ReportForm({ cities }) {
                                     value={descriptionInput}
                                     onChange={(e) => setDescriptionInput(e.target.value)}
                                     required 
-                                    className={`${InputStyle} min-h-37.5 resize-none pt-3`} 
+                                    className={`${InputStyle} min-h-37.5 resize-none pt-3 ${formErrors?.description ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20' : ''}`} 
                                 />
+                                {formErrors?.description && <p className="text-xs text-red-400 mt-1 flex items-center gap-1"><AlertCircle className="h-3 w-3" />{formErrors.description}</p>}
                             </div>
 
                             <div className="space-y-1">
