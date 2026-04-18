@@ -1,15 +1,14 @@
-
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { getReportByReportId } from '@/actions/reportActions';
-import { getReportByReportIdSchema, validateObject, formatValidationErrors } from '@/lib/validation-schemas';
+import { getVideoUrl } from '@/actions/reportActions';
+import { getVideoUrlSchema, validateObject, formatValidationErrors } from '@/lib/validation-schemas';
 
 export async function GET(request, { params }) {
     try {
-        const { id } = await params;
+        const { videoId } = await params;
         
-        // Validate report ID
-        const validation = await validateObject({ reportId: id }, getReportByReportIdSchema);
+        // Validate video ID
+        const validation = await validateObject({ videoId }, getVideoUrlSchema);
         
         if (!validation.success) {
             return NextResponse.json({ 
@@ -18,15 +17,13 @@ export async function GET(request, { params }) {
                 errors: formatValidationErrors(validation.errors)
             }, { status: 400 });
         }
-        
-        const result = await getReportByReportId(id);
-        
-        if (!result.success) {
-            return NextResponse.json({ success: false, error: "Report not found" }, { status: 404 });
-        }
-        
-        return NextResponse.json(result);
+
+        const videoUrl = await getVideoUrl(videoId);
+
+        return NextResponse.json({ success: true, videoUrl });
     } catch (error) {
+        console.error("VIDEO_URL_API_ERROR:", error);
+        
         if (error instanceof z.ZodError) {
             return NextResponse.json({ 
                 success: false, 

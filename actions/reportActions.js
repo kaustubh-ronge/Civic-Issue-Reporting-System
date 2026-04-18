@@ -1121,6 +1121,8 @@
 // }
 
 
+
+
 'use server'
 
 import { db } from "@/lib/prisma"
@@ -1128,6 +1130,8 @@ import { checkUser } from "@/lib/checkUser"
 import { revalidatePath } from "next/cache"
 import { sendNotification } from "@/lib/notifications"
 import { analyzeWeatherAndRisk } from "@/lib/environmentalIntelligence"
+import { z } from 'zod'
+import { processAudioSubmissionSchema, createReportSchema, createMobileReportSchema, getReportByReportIdSchema, confirmResolutionSchema, reopenReportSchema, getVideoUrlSchema, validateFormData, validateObject, formatValidationErrors } from '@/lib/validation-schemas'
 import fs from "fs"
 import path from "path"
 import { randomUUID } from "crypto"
@@ -1136,6 +1140,12 @@ import Mux from '@mux/mux-node'
 // --- NEW: MULTILINGUAL VOICE ACTION ---
 export async function processAudioSubmission(formData) {
     try {
+        // Validate audio submission
+        const validation = await validateFormData(formData, processAudioSubmissionSchema);
+        if (!validation.success) {
+            return { success: false, error: "Validation failed", errors: formatValidationErrors(validation.errors) };
+        }
+
         const audioFile = formData.get("audio");
         if (!audioFile) return { success: false, error: "No audio file provided." };
 
@@ -1199,6 +1209,12 @@ async function uploadFileToMux(file) {
 
 export async function createReport(formData) {
     try {
+        // Validate report submission
+        const validation = await validateFormData(formData, createReportSchema);
+        if (!validation.success) {
+            return { success: false, error: "Validation failed", errors: formatValidationErrors(validation.errors) };
+        }
+
         const user = await checkUser()
         if (!user) return { success: false, error: "You must be logged in." }
 
@@ -1376,6 +1392,21 @@ export async function createReport(formData) {
             await sendNotification(user.id, "Report Submitted", `ID: ${reportId}`, reportId, detectedPriority).catch(() => { })
         }
 
+        // Send notification to admins in the same department
+        try {
+            const admins = await db.adminProfile.findMany({ 
+                where: { departmentId: report.departmentId }, 
+                include: { user: true } 
+            })
+            for (const admin of admins) {
+                if (admin.user) {
+                    await sendNotification(admin.user.id, "New Report in Your Area", `A new report has been submitted: ${report.title} (ID: ${reportId})`, reportId, detectedPriority).catch(() => { })
+                }
+            }
+        } catch (adminError) {
+            console.error("Failed to send admin notifications:", adminError)
+        }
+
         // TRIGGER AI WEATHER ASSESSMENT (FIXED: Added await)
         await analyzeWeatherAndRisk(report.id).catch(console.error);
 
@@ -1392,6 +1423,12 @@ export async function createReport(formData) {
 
 export async function getReportByReportId(reportId) {
     try {
+        // Validate report ID
+        const validation = await validateObject({ reportId }, getReportByReportIdSchema);
+        if (!validation.success) {
+            return { success: false, error: "Validation failed", errors: formatValidationErrors(validation.errors) };
+        }
+
         let report = await db.report.findUnique({
             where: { reportId },
             include: {
@@ -1433,7 +1470,12 @@ export async function getUserReports() {
 }
 
 export async function getVideoUrl(videoId) {
-    if (!videoId) throw new Error("Missing videoId")
+    // Validate video ID
+    const validation = validateObject({ videoId }, getVideoUrlSchema);
+    if (!validation.success) {
+        throw new Error(formatValidationErrors(validation.errors).videoId || 'Invalid video ID');
+    }
+
     const vid = await db.reportVideo.findUnique({ where: { id: videoId } })
     if (!vid) throw new Error("Video not found")
 
@@ -1446,6 +1488,13 @@ export async function getVideoUrl(videoId) {
 
 export async function confirmResolution(formData) {
     try {
+        // Validate confirmation
+        const rawData = formData instanceof FormData ? { reportId: formData.get("reportId") } : { reportId: formData };
+        const validation = await validateObject(rawData, confirmResolutionSchema);
+        if (!validation.success) {
+            return { success: false, error: "Validation failed", errors: formatValidationErrors(validation.errors) };
+        }
+
         const user = await checkUser()
         if (!user) return { success: false, error: "You must be logged in." }
 
@@ -1483,6 +1532,15 @@ export async function confirmResolution(formData) {
 
 export async function reopenReport(formData) {
     try {
+        // Validate reopen request
+        const rawData = formData instanceof FormData 
+            ? { reportId: formData.get("reportId"), reason: formData.get("reason") }
+            : { reportId: formData, reason: '' };
+        const validation = await validateObject(rawData, reopenReportSchema);
+        if (!validation.success) {
+            return { success: false, error: "Validation failed", errors: formatValidationErrors(validation.errors) };
+        }
+
         const user = await checkUser()
         if (!user) return { success: false, error: "You must be logged in." }
 
@@ -1539,6 +1597,12 @@ export async function autoCloseExpiredVerifications() {
 
 export async function createMobileReport(formData) {
     try {
+        // Validate mobile report submission
+        const validation = await validateFormData(formData, createMobileReportSchema);
+        if (!validation.success) {
+            return { success: false, error: "Validation failed", errors: formatValidationErrors(validation.errors) };
+        }
+
         const user = await checkUser();
         if (!user) return { success: false, error: "Unauthorized" };
 

@@ -1,15 +1,14 @@
-
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { getReportByReportId } from '@/actions/reportActions';
-import { getReportByReportIdSchema, validateObject, formatValidationErrors } from '@/lib/validation-schemas';
+import { confirmResolution } from '@/actions/reportActions';
+import { confirmResolutionSchema, validateObject, formatValidationErrors } from '@/lib/validation-schemas';
 
-export async function GET(request, { params }) {
+export async function POST(request, { params }) {
     try {
         const { id } = await params;
         
         // Validate report ID
-        const validation = await validateObject({ reportId: id }, getReportByReportIdSchema);
+        const validation = await validateObject({ reportId: id }, confirmResolutionSchema);
         
         if (!validation.success) {
             return NextResponse.json({ 
@@ -18,15 +17,15 @@ export async function GET(request, { params }) {
                 errors: formatValidationErrors(validation.errors)
             }, { status: 400 });
         }
-        
-        const result = await getReportByReportId(id);
-        
-        if (!result.success) {
-            return NextResponse.json({ success: false, error: "Report not found" }, { status: 404 });
-        }
-        
+
+        const formData = new FormData();
+        formData.append("reportId", id);
+
+        const result = await confirmResolution(formData);
         return NextResponse.json(result);
     } catch (error) {
+        console.error("CONFIRM_RESOLUTION_API_ERROR:", error);
+        
         if (error instanceof z.ZodError) {
             return NextResponse.json({ 
                 success: false, 

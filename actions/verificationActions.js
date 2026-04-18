@@ -3,9 +3,17 @@
 import { db } from "@/lib/prisma"
 import { checkUser } from "@/lib/checkUser"
 import { revalidatePath } from "next/cache"
+import { z } from 'zod'
+import { verifyReportSchema, validateObject, formatValidationErrors } from '@/lib/validation-schemas'
 
 export async function verifyReport(reportId) {
     try {
+        // Validate report ID
+        const validation = await validateObject({ reportId }, verifyReportSchema)
+        if (!validation.success) {
+            return { success: false, error: "Validation failed", errors: formatValidationErrors(validation.errors) }
+        }
+
         const user = await checkUser()
         if (!user) return { success: false, error: "You must be logged in." }
 
