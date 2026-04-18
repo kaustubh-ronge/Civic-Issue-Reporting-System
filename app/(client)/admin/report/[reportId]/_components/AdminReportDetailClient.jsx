@@ -15,6 +15,7 @@ import { updateReportStatus } from "@/actions/adminDashboardActions"
 import { toast } from "sonner"
 import { motion } from "framer-motion"
 import LeafletLocationMap from "@/components/LeafletLocationMap"
+import MuxPlayer from "@mux/mux-player-react"
 
 export default function AdminReportDetailClient({ report, user, adminProfile }) {
     const router = useRouter()
@@ -80,9 +81,10 @@ export default function AdminReportDetailClient({ report, user, adminProfile }) 
     }
 
     function VideoLoader({ video }) {
-        const [src, setSrc] = useState(null)
+        const [src, setSrc] = useState(video.url || null)
         const [error, setError] = useState(false)
         useEffect(() => {
+            if (video.playbackId || src) return;
             let cancelled = false
             import("@/actions/reportActions").then(({ getVideoUrl }) => {
                 if (!video.id) return
@@ -99,7 +101,17 @@ export default function AdminReportDetailClient({ report, user, adminProfile }) 
                     })
             })
             return () => { cancelled = true }
-        }, [video.id])
+        }, [video.id, video.playbackId, src])
+
+        if (video.playbackId) {
+            return (
+                <MuxPlayer
+                    playbackId={video.playbackId}
+                    metadata={{ video_id: video.id, video_title: 'Evidence Video' }}
+                    className="w-full h-full object-cover"
+                />
+            )
+        }
 
         if (src === null && !error) {
             return <div className="aspect-video bg-black flex items-center justify-center text-slate-500">Loading video…</div>
