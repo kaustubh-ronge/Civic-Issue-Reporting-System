@@ -1,5 +1,4 @@
 
-
 // 'use server'
 
 // import { db } from "@/lib/prisma"
@@ -11,6 +10,34 @@
 // import path from "path"
 // import { randomUUID } from "crypto"
 // import Mux from '@mux/mux-node'
+
+// // --- NEW: MULTILINGUAL VOICE ACTION ---
+// export async function processAudioSubmission(formData) {
+//     try {
+//         const audioFile = formData.get("audio");
+//         if (!audioFile) return { success: false, error: "No audio file provided." };
+
+//         // Uses Environment Variable for ML Engine
+//         const engineUrl = process.env.ML_ENGINE_URL || "http://127.0.0.1:8000";
+        
+//         const pythonFormData = new FormData();
+//         pythonFormData.append("file", audioFile);
+
+//         const response = await fetch(`${engineUrl}/process-voice`, {
+//             method: 'POST',
+//             body: pythonFormData,
+//         });
+
+//         if (!response.ok) throw new Error("Voice Engine down");
+
+//         const data = await response.json();
+//         return data;
+
+//     } catch (error) {
+//         console.error("Voice Processing Error:", error);
+//         return { success: false, error: "Failed to process voice." };
+//     }
+// }
 
 // async function uploadFileToMux(file) {
 //     const { MUX_TOKEN_ID, MUX_TOKEN_SECRET } = process.env
@@ -105,10 +132,11 @@
 //                 shareToken,
                 
 //                 aiImageUrl: aiImageBase64 ? aiImageBase64.toString() : null,
-                
+
 //                 author: { connect: { id: user.id } },
 //                 city: { connect: { id: cityId } },
 //                 department: { connect: { id: departmentId } },
+                
 //                 ...(area && { area: { connect: { id: area.id } } }),
 
 //                 ...(tags.length > 0 && {
@@ -119,39 +147,24 @@
 //                         }))
 //                     }
 //                 }),
-
 //                 updates: {
 //                     create: { newStatus: "PENDING", note: "Report submitted", updatedBy: "system" }
 //                 }
 //             }
-//         })
+//         });
 
-//         const imageFiles = (formData.getAll("images") || []).slice(0, 5)
-
-//         if (imageFiles && imageFiles.length > 0) {
-//             for (let i = 0; i < imageFiles.length; i++) {
-//                 const file = imageFiles[i]
-
-//                 if (file && file.size > 0) {
-//                     const buffer = Buffer.from(await file.arrayBuffer());
-//                     const base64Data = buffer.toString("base64");
-//                     const fileType = file.type || "image/jpeg"; 
-//                     const base64Url = `data:${fileType};base64,${base64Data}`;
-
-//                     await db.reportImage.create({
-//                         data: {
-//                             reportId: report.id,
-//                             url: base64Url, 
-//                             order: i
-//                         }
-//                     })
-
-//                     if (i === 0) {
-//                         await db.report.update({
-//                             where: { id: report.id },
-//                             data: { imageUrl: base64Url }
-//                         })
-//                     }
+//         const images = formData.getAll("images");
+//         for (let i = 0; i < images.length; i++) {
+//             const file = images[i];
+//             if (file && file.size > 0) {
+//                 const buffer = Buffer.from(await file.arrayBuffer());
+//                 const base64Url = `data:${file.type || "image/jpeg"};base64,${buffer.toString("base64")}`;
+//                 await db.reportImage.create({
+//                     data: { reportId: report.id, url: base64Url, order: i }
+//                 });
+                
+//                 if (i === 0) {
+//                     await db.report.update({ where: { id: report.id }, data: { imageUrl: base64Url } });
 //                 }
 //             }
 //         }
@@ -230,10 +243,9 @@
 //         // TRIGGER AI WEATHER ASSESSMENT
 //         analyzeWeatherAndRisk(report.id).catch(console.error);
 
-//         revalidatePath('/admin')
-//         revalidatePath('/status')
-
-//         return response
+//         revalidatePath('/status');
+//         revalidatePath('/admin');
+//         return response;
 
 //     } catch (error) {
 //         console.error("Submission Error:", error)
@@ -527,7 +539,6 @@
 //             await sendNotification(user.id, "Report Submitted", `ID: ${reportId}`, reportId, priority).catch(() => {});
 //         }
 
-//         // TRIGGER AI WEATHER ASSESSMENT
 //         analyzeWeatherAndRisk(report.id).catch(console.error);
 
 //         revalidatePath('/status');
@@ -696,18 +707,21 @@ export async function createReport(formData) {
             }
         });
 
+        // Applied buffer fix here as well to be safe for web uploads
         const images = formData.getAll("images");
         for (let i = 0; i < images.length; i++) {
             const file = images[i];
-            if (file && file.size > 0) {
+            if (file && typeof file.arrayBuffer === 'function') {
                 const buffer = Buffer.from(await file.arrayBuffer());
-                const base64Url = `data:${file.type || "image/jpeg"};base64,${buffer.toString("base64")}`;
-                await db.reportImage.create({
-                    data: { reportId: report.id, url: base64Url, order: i }
-                });
-                
-                if (i === 0) {
-                    await db.report.update({ where: { id: report.id }, data: { imageUrl: base64Url } });
+                if (buffer.length > 0) {
+                    const base64Url = `data:${file.type || "image/jpeg"};base64,${buffer.toString("base64")}`;
+                    await db.reportImage.create({
+                        data: { reportId: report.id, url: base64Url, order: i }
+                    });
+                    
+                    if (i === 0) {
+                        await db.report.update({ where: { id: report.id }, data: { imageUrl: base64Url } });
+                    }
                 }
             }
         }
@@ -783,7 +797,6 @@ export async function createReport(formData) {
             await sendNotification(user.id, "Report Submitted", `ID: ${reportId}`, reportId, detectedPriority).catch(() => { })
         }
 
-        // TRIGGER AI WEATHER ASSESSMENT
         analyzeWeatherAndRisk(report.id).catch(console.error);
 
         revalidatePath('/status');
@@ -1062,21 +1075,34 @@ export async function createMobileReport(formData) {
             }
         });
 
+        // --- REACT NATIVE UPLOAD FIX ---
         const images = formData.getAll("images");
         for (let i = 0; i < images.length; i++) {
             const file = images[i];
-            if (file && file.size > 0) {
+            
+            // Check if it's a valid File object by looking for the arrayBuffer function, 
+            // bypassing the broken file.size property from React Native.
+            if (file && typeof file.arrayBuffer === 'function') {
                 const buffer = Buffer.from(await file.arrayBuffer());
-                const base64Url = `data:${file.type || "image/jpeg"};base64,${buffer.toString("base64")}`;
-                await db.reportImage.create({
-                    data: { reportId: report.id, url: base64Url, order: i }
-                });
                 
-                if (i === 0) {
-                    await db.report.update({ where: { id: report.id }, data: { imageUrl: base64Url } });
+                // Check the actual byte length of the buffer instead of file.size
+                if (buffer.length > 0) {
+                    const base64Url = `data:${file.type || "image/jpeg"};base64,${buffer.toString("base64")}`;
+                    
+                    await db.reportImage.create({
+                        data: { reportId: report.id, url: base64Url, order: i }
+                    });
+                    
+                    if (i === 0) {
+                        await db.report.update({ 
+                            where: { id: report.id }, 
+                            data: { imageUrl: base64Url } 
+                        });
+                    }
                 }
             }
         }
+        // -------------------------------
 
         if (sendNotification) {
             await sendNotification(user.id, "Report Submitted", `ID: ${reportId}`, reportId, priority).catch(() => {});
